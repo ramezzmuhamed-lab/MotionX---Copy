@@ -1,0 +1,161 @@
+const translations = {
+    ar: {
+        "nav-home": "الرئيسية",
+        "nav-owners": "الملاك",
+        "nav-cars": "السيارات",
+        "nav-customers": "العملاء",
+        "nav-contracts": "العقود",
+        "nav-payments": "المدفوعات",
+        "nav-expenses": "المصروفات",
+        "nav-reports": "التقارير",
+        "nav-settings": "الإعدادات",
+        "title-dashboard": "لوحة التحكم الرئيسية",
+        "title-owners": "إدارة ملاك السيارات",
+        "title-cars": "إدارة السيارات",
+        "title-customers": "إدارة العملاء",
+        "title-contracts": "إدارة العقود",
+        "title-payments": "سجل المدفوعات",
+        "title-expenses": "المصروفات",
+        "title-reports": "التقارير الشاملة",
+        "title-settings": "إعدادات النظام",
+        "user-admin": "مسؤول النظام",
+        "stat-cars": "إجمالي السيارات",
+        "stat-owners": "عدد الملاك",
+        "stat-customers": "عدد العملاء",
+        "stat-contracts": "عدد العقود",
+        "stat-revenues": "إجمالي الإيرادات",
+        "stat-expenses-total": "إجمالي المصروفات",
+        "stat-profit": "صافي الأرباح"
+    },
+    en: {
+        "nav-home": "Dashboard",
+        "nav-owners": "Owners",
+        "nav-cars": "Cars",
+        "nav-customers": "Customers",
+        "nav-contracts": "Contracts",
+        "nav-payments": "Payments",
+        "nav-expenses": "Expenses",
+        "nav-reports": "Reports",
+        "nav-settings": "Settings",
+        "title-dashboard": "Main Dashboard",
+        "title-owners": "Owners Management",
+        "title-cars": "Cars Fleet",
+        "title-customers": "Customers Management",
+        "title-contracts": "Contracts Panel",
+        "title-payments": "Payments Log",
+        "title-expenses": "Expenses Tracker",
+        "title-reports": "Comprehensive Reports",
+        "title-settings": "System Settings",
+        "user-admin": "System Admin",
+        "stat-cars": "Total Cars",
+        "stat-owners": "Total Owners",
+        "stat-customers": "Total Customers",
+        "stat-contracts": "Total Contracts",
+        "stat-revenues": "Total Revenues",
+        "stat-expenses-total": "Total Expenses",
+        "stat-profit": "Net Profit"
+    }
+};
+
+// انتظر تحميل الـ DOM تماماً لتفادي أي أخطاء في الـ Elements
+document.addEventListener('DOMContentLoaded', () => {
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    const langToggleBtn = document.getElementById('lang-toggle');
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const pageTitle = document.getElementById('page-title');
+
+    // 1. تشغيل الـ Dark Mode وإدارته
+    function initTheme() {
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        if (savedTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    }
+
+    themeToggleBtn.addEventListener('click', () => {
+        if (document.documentElement.classList.contains('dark')) {
+            document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        } else {
+            document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        }
+    });
+
+    // 2. تشغيل الـ Languages وإدارتها
+    function applyLanguage(lang) {
+        localStorage.setItem('lang', lang);
+        
+        if (lang === 'en') {
+            document.documentElement.setAttribute('dir', 'ltr');
+            document.documentElement.setAttribute('lang', 'en');
+            document.documentElement.classList.add('lang-en');
+            langToggleBtn.innerText = 'AR';
+            // قلب ترتيب الهيدر وعناصر الكروت
+            document.querySelectorAll('.flex-row-reverse').forEach(el => el.classList.remove('flex-row-reverse'));
+        } else {
+            document.documentElement.setAttribute('dir', 'rtl');
+            document.documentElement.setAttribute('lang', 'ar');
+            document.documentElement.classList.remove('lang-en');
+            langToggleBtn.innerText = 'EN';
+        }
+
+        // ترجمة كل عنصر يحمل التاج data-i18n
+        document.querySelectorAll('[data-i18n]').forEach(element => {
+            const key = element.getAttribute('data-i18n');
+            if (translations[lang] && translations[lang][key]) {
+                element.innerText = translations[lang][key];
+            }
+        });
+    }
+
+    langToggleBtn.addEventListener('click', () => {
+        const currentLang = localStorage.getItem('lang') || 'ar';
+        const newLang = currentLang === 'ar' ? 'en' : 'ar';
+        applyLanguage(newLang);
+        
+        // تحديث عنوان الصفحة العلوي فوراً بعد الترجمة بناء على الـ Tab المفتوح حالياً
+        const activeTabBtn = document.querySelector('.tab-btn.bg-blue-600');
+        if (activeTabBtn) {
+            const targetTab = activeTabBtn.getAttribute('data-tab');
+            pageTitle.innerText = translations[newLang][`title-${targetTab}`] || translations[newLang][`nav-${targetTab}`];
+        }
+    });
+
+    // 3. نظام التنقل والتحكم في الـ Tabs
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetTab = btn.getAttribute('data-tab');
+            const currentLang = localStorage.getItem('lang') || 'ar';
+
+            // إعادة الأزرار لشكلها العادي غير النشط
+            tabButtons.forEach(b => {
+                b.classList.remove('bg-blue-600', 'text-white');
+                b.classList.add('text-slate-400', 'hover:bg-slate-800', 'hover:text-white');
+            });
+
+            // تفعيل الزر المضغوط
+            btn.classList.add('bg-blue-600', 'text-white');
+            btn.classList.remove('text-slate-400', 'hover:bg-slate-800', 'hover:text-white');
+
+            // إخفاء كافة الـ Tabs وإظهار المطلوبة
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+                if (content.id === `tab-${targetTab}`) {
+                    content.classList.add('active');
+                }
+            });
+
+            // تغيير العنوان العلوي حسب الـ Tab
+            pageTitle.innerText = translations[currentLang][`title-${targetTab}`] || translations[currentLang][`nav-${targetTab}`];
+        });
+    });
+
+    // تنفيذ أولي للثيم واللغة
+    initTheme();
+    const defaultLang = localStorage.getItem('lang') || 'ar';
+    applyLanguage(defaultLang);
+});

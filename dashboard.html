@@ -1,0 +1,2343 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion X - نظام إدارة تأجير السيارات</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Flatpickr (Calendar Datepicker) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css" id="flatpickr-dark-theme">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ar.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Poppins:wght@300;400;500;600;700&display=swap');
+        :root { --font-ar: 'Cairo', sans-serif; --font-en: 'Poppins', sans-serif; }
+        body { font-family: var(--font-ar); transition: background-color 0.2s, color 0.2s; }
+        html.lang-en body { font-family: var(--font-en); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* تحسينات الألوان للوضع الفاتح والداكن الإجباري */
+        .dark body { background-color: #020617; color: #f8fafc; }
+        html:not(.dark) body { background-color: #f8fafc; color: #0f172a; }
+
+        /* طباعة الوصل المعروض في صفحة التقارير فقط */
+        @media print {
+            @page { margin: 12mm; size: A4; }
+            body {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                height: auto !important;
+            }
+            body * { visibility: hidden !important; }
+            #print-invoice-area,
+            #print-invoice-area * { visibility: visible !important; }
+            #print-invoice-area {
+                display: block !important;
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                max-width: none !important;
+                margin: 0 !important;
+                padding: 24px !important;
+                border: none !important;
+                box-shadow: none !important;
+                background: white !important;
+                color: black !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            #print-invoice-area .bg-slate-900 {
+                background-color: #0f172a !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            #print-invoice-area .bg-slate-900,
+            #print-invoice-area .bg-slate-900 span {
+                color: white !important;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased h-screen overflow-hidden flex">
+
+    <aside id="sidebar" class="w-20 bg-slate-900 border-e border-slate-800 flex flex-col justify-between items-center py-6 z-20 h-full">
+        <div class="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20">
+            <i class="fa-solid fa-cube text-xl"></i>
+        </div>
+
+        <nav class="flex flex-col space-y-4 w-full px-3" id="sidebar-nav">
+            <button data-tab="dashboard" class="tab-btn group relative w-full h-12 flex items-center justify-center rounded-xl bg-blue-600 text-white transition-all duration-300">
+                <i class="fa-solid fa-chart-pie text-xl"></i>
+                <span class="absolute right-24 bg-slate-900 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30" data-i18n="nav-home">الرئيسية</span>
+            </button>
+            <button data-tab="owners" class="tab-btn group relative w-full h-12 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all duration-300">
+                <i class="fa-solid fa-user-tie text-xl"></i>
+                <span class="absolute right-24 bg-slate-900 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30" data-i18n="nav-owners">الملاك</span>
+            </button>
+            <button data-tab="cars" class="tab-btn group relative w-full h-12 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all duration-300">
+                <i class="fa-solid fa-car text-xl"></i>
+                <span class="absolute right-24 bg-slate-900 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30" data-i18n="nav-cars">السيارات</span>
+            </button>
+            <button data-tab="customers" class="tab-btn group relative w-full h-12 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all duration-300">
+                <i class="fa-solid fa-users text-xl"></i>
+                <span class="absolute right-24 bg-slate-900 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30" data-i18n="nav-customers">العملاء</span>
+            </button>
+            <button data-tab="contracts" class="tab-btn group relative w-full h-12 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all duration-300">
+                <i class="fa-solid fa-file-contract text-xl"></i>
+                <span class="absolute right-24 bg-slate-900 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30" data-i18n="nav-contracts">العقود</span>
+            </button>
+            <button data-tab="payments" class="tab-btn group relative w-full h-12 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all duration-300">
+                <i class="fa-solid fa-money-bill-wave text-xl"></i>
+                <span class="absolute right-24 bg-slate-900 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30" data-i18n="nav-payments">المدفوعات</span>
+            </button>
+            <button data-tab="expenses" class="tab-btn group relative w-full h-12 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all duration-300">
+                <i class="fa-solid fa-wallet text-xl"></i>
+                <span class="absolute right-24 bg-slate-900 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30" data-i18n="nav-expenses">المصروفات</span>
+            </button>
+            <button data-tab="reports" class="tab-btn group relative w-full h-12 flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-all duration-300">
+                <i class="fa-solid fa-file-invoice-dollar text-xl"></i>
+                <span class="absolute right-24 bg-slate-900 text-white px-2 py-1 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30" data-i18n="nav-reports">التقارير</span>
+            </button>
+        </nav>
+
+        <div class="w-full px-3 text-center border-t border-slate-800 pt-4">
+            <button data-tab="settings" class="tab-btn w-12 h-12 rounded-xl flex items-center justify-center text-slate-400 hover:bg-slate-800 text-xl mx-auto">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+        </div>
+    </aside>
+
+    <div class="flex-1 flex flex-col overflow-y-auto">
+        
+        <header class="px-8 py-6 flex items-center justify-between border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <div>
+                <h1 id="page-title" class="text-2xl font-bold tracking-wide" data-i18n="title-dashboard">لوحة التحكم الرئيسية</h1>
+                <p class="text-sm text-slate-500 mt-0.5">Motion X Systems v1.0</p>
+            </div>
+            
+            <div class="flex items-center space-x-4 space-x-reverse">
+                <button id="lang-toggle" class="px-3 py-1.5 rounded-xl border border-gray-300 dark:border-slate-800 text-xs font-bold bg-gray-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all">
+                    EN
+                </button>
+
+                <button id="theme-toggle" class="p-2.5 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-all flex items-center justify-center">
+                    <i id="theme-icon" class="fa-solid fa-sun text-lg text-amber-500"></i>
+                </button>
+
+                <div class="h-6 w-px bg-gray-300 dark:bg-slate-800"></div>
+                <span class="text-sm font-semibold px-4 py-2 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-800 text-slate-800 dark:text-slate-200" data-i18n="user-admin">مسؤول النظام</span>
+            </div>
+        </header>
+
+        <main class="p-8 space-y-6">
+            <div id="tab-dashboard" class="tab-content active space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 flex items-center justify-between shadow-sm">
+                        <div>
+                            <p class="text-sm text-slate-400 dark:text-slate-500 font-medium" data-i18n="stat-cars">إجمالي السيارات</p>
+                            <h3 class="text-3xl font-bold mt-1 tracking-tight" id="stat-cars-count">0</h3>
+                        </div>
+                        <div class="bg-blue-500/10 p-4 rounded-xl text-blue-500"><i class="fa-solid fa-car text-xl"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 flex items-center justify-between shadow-sm">
+                        <div>
+                            <p class="text-sm text-slate-400 dark:text-slate-500 font-medium" data-i18n="stat-owners">عدد الملاك</p>
+                            <h3 class="text-3xl font-bold mt-1 tracking-tight" id="stat-owners-count">0</h3>
+                        </div>
+                        <div class="bg-purple-500/10 p-4 rounded-xl text-purple-500"><i class="fa-solid fa-user-tie text-xl"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 flex items-center justify-between shadow-sm">
+                        <div>
+                            <p class="text-sm text-slate-400 dark:text-slate-500 font-medium" data-i18n="stat-customers">عدد العملاء</p>
+                            <h3 class="text-3xl font-bold mt-1 tracking-tight" id="stat-customers-count">0</h3>
+                        </div>
+                        <div class="bg-emerald-500/10 p-4 rounded-xl text-emerald-500"><i class="fa-solid fa-users text-xl"></i></div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 flex items-center justify-between shadow-sm">
+                        <div>
+                            <p class="text-sm text-slate-400 dark:text-slate-500 font-medium" data-i18n="stat-contracts">عدد العقود</p>
+                            <h3 class="text-3xl font-bold mt-1 tracking-tight" id="stat-contracts-count">0</h3>
+                        </div>
+                        <div class="bg-amber-500/10 p-4 rounded-xl text-amber-500"><i class="fa-solid fa-file-contract text-xl"></i></div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
+                        <p class="text-sm text-slate-400 dark:text-slate-500 font-medium" data-i18n="stat-revenues">إجمالي الإيرادات</p>
+                        <h3 class="text-3xl font-bold text-emerald-500 mt-2 tracking-tight" id="stat-total-revenues">0.00 EGP</h3>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
+                        <p class="text-sm text-slate-400 dark:text-slate-500 font-medium" data-i18n="stat-expenses-total">إجمالي المصروفات</p>
+                        <h3 class="text-3xl font-bold text-rose-500 mt-2 tracking-tight" id="stat-total-expenses">0.00 EGP</h3>
+                    </div>
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
+                        <p class="text-sm text-slate-400 dark:text-slate-500 font-medium" data-i18n="stat-profit">صافي الأرباح</p>
+                        <h3 class="text-3xl font-bold text-blue-500 mt-2 tracking-tight" id="stat-net-profit">0.00 EGP</h3>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-owners" class="tab-content space-y-6">
+                <div class="flex justify-between items-center border-b border-gray-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-white" data-i18n="title-owners">إدارة ملاك السيارات</h2>
+                        <p class="text-sm text-slate-500 mt-0.5" data-i18n="owner-sub">إضافة، تعديل، حذف ومتابعة حسابات الملاك</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm space-y-4">
+                        <h3 id="owner-form-title" class="font-bold text-slate-700 dark:text-slate-300 text-sm border-b border-gray-100 dark:border-slate-800 pb-2" data-i18n="form-title-add">إضافة مالك جديد</h3>
+                        
+                        <form id="owner-form" class="space-y-3">
+                            <input type="hidden" id="owner-id"> 
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-owner-name">اسم المالك الكامل</label>
+                                <input type="text" id="owner-name" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-owner-phone">رقم الهاتف</label>
+                                <input type="tel" id="owner-phone" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-owner-nid">الرقم القومي (14 رقم)</label>
+                                <input type="text" id="owner-national-id" required maxlength="14" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-owner-address">العنوان</label>
+                                <input type="text" id="owner-address" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-owner-notes">ملاحظات</label>
+                                <textarea id="owner-notes" rows="2" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm"></textarea>
+                            </div>
+                            
+                            <div class="flex space-x-2 space-x-reverse pt-2">
+                                <button type="submit" id="btn-save-owner" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors shadow-lg shadow-blue-500/10" data-i18n="btn-save">حفظ البيانات</button>
+                                <button type="button" id="btn-cancel-edit" class="hidden bg-gray-200 hover:bg-gray-300 text-slate-700 font-semibold px-4 py-2 rounded-xl text-sm transition-colors" data-i18n="btn-cancel">إلغاء</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center bg-gray-50/50 dark:bg-slate-950/20">
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-magnifying-glass absolute right-4 top-3 text-slate-400 text-sm"></i>
+                                <input type="text" id="search-owners" class="w-full pr-10 pl-4 py-2 text-sm bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100">
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table id="owners-table" class="w-full text-right border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-gray-100 dark:border-slate-800">
+                                        <th class="p-4" data-i18n="th-name">الاسم</th>
+                                        <th class="p-4" data-i18n="th-phone">الهاتف</th>
+                                        <th class="p-4" data-i18n="th-nid">الرقم القومي</th>
+                                        <th class="p-4" data-i18n="th-address">العنوان</th>
+                                        <th class="p-4 text-center" data-i18n="th-actions">العمليات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="owners-table-body" class="divide-y divide-gray-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+                                    <tr>
+                                        <td colspan="5" class="p-8 text-center text-slate-400 dark:text-slate-600"><i class="fa-solid fa-spinner fa-spin ml-2"></i>جاري تحميل بيانات الملاك من Firebase...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-cars" class="tab-content space-y-6">
+                <div class="flex justify-between items-center border-b border-gray-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-white" data-i18n="title-cars">إدارة السيارات</h2>
+                        <p class="text-sm text-slate-500 mt-0.5" data-i18n="car-sub">إضافة ومتابعة أسطول السيارات وربطها بالملاك الحاليين</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm space-y-4">
+                        <h3 id="car-form-title" class="font-bold text-slate-700 dark:text-slate-300 text-sm border-b border-gray-100 dark:border-slate-800 pb-2" data-i18n="car-form-title-add">إضافة سيارة جديدة</h3>
+                        
+                        <form id="car-form" class="space-y-3">
+                            <input type="hidden" id="car-id"> 
+                            
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-car-owner">اختر مالك السيارة</label>
+                                <select id="car-owner-select" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                    <option value="" data-i18n="opt-loading">جاري تحميل الملاك...</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-car-brand">الماركة (مثال: Toyota)</label>
+                                <input type="text" id="car-brand" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-car-model">الموديل (مثال: Corolla)</label>
+                                <input type="text" id="car-model" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-car-year">سنة الصنع (مثال: 2024)</label>
+                                <input type="number" id="car-year" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-car-plate">رقم اللوحة (حروف وأرقام)</label>
+                                <input type="text" id="car-plate" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            
+                            <div class="flex space-x-2 space-x-reverse pt-2">
+                                <button type="submit" id="btn-save-car" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors shadow-lg shadow-blue-500/10" data-i18n="btn-car-save">حفظ السيارة</button>
+                                <button type="button" id="btn-cancel-car-edit" class="hidden bg-gray-200 hover:bg-gray-300 text-slate-700 font-semibold px-4 py-2 rounded-xl text-sm transition-colors" data-i18n="btn-car-cancel">إلغاء</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center bg-gray-50/50 dark:bg-slate-950/20">
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-magnifying-glass absolute right-4 top-3 text-slate-400 text-sm"></i>
+                                <input type="text" id="search-cars" class="w-full pr-10 pl-4 py-2 text-sm bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100">
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table id="cars-table" class="w-full text-right border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-gray-100 dark:border-slate-800">
+                                        <th class="p-4" data-i18n="th-car-owner">المالك</th>
+                                        <th class="p-4" data-i18n="th-car-brand">الماركة</th>
+                                        <th class="p-4" data-i18n="th-car-model">الموديل</th>
+                                        <th class="p-4" data-i18n="th-car-year">السنة</th>
+                                        <th class="p-4" data-i18n="th-car-plate">رقم اللوحة</th>
+                                        <th class="p-4 text-center" data-i18n="th-car-actions">العمليات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cars-table-body" class="divide-y divide-gray-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+                                    <tr>
+                                        <td colspan="6" class="p-8 text-center text-slate-400 dark:text-slate-600"><i class="fa-solid fa-spinner fa-spin ml-2"></i>جاري تحميل السيارات من Firebase...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-customers" class="tab-content space-y-6">
+                <div class="flex justify-between items-center border-b border-gray-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-white" data-i18n="title-customers">إدارة العملاء</h2>
+                        <p class="text-sm text-slate-500 mt-0.5" data-i18n="customer-sub">إضافة ومتابعة بيانات المستأجرين</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm space-y-4">
+                        <h3 id="customer-form-title" class="font-bold text-slate-700 dark:text-slate-300 text-sm border-b border-gray-100 dark:border-slate-800 pb-2" data-i18n="customer-form-title-add">إضافة عميل جديد</h3>
+                        
+                        <form id="customer-form" class="space-y-3">
+                            <input type="hidden" id="customer-id"> 
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-customer-name">اسم العميل الكامل</label>
+                                <input type="text" id="customer-name" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-customer-phone">رقم الهاتف</label>
+                                <input type="tel" id="customer-phone" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-customer-nid">الرقم القومي (14 رقم)</label>
+                                <input type="text" id="customer-national-id" required maxlength="14" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            
+                            <div class="flex space-x-2 space-x-reverse pt-2">
+                                <button type="submit" id="btn-save-customer" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors shadow-lg shadow-blue-500/10" data-i18n="btn-customer-save">حفظ العميل</button>
+                                <button type="button" id="btn-cancel-customer-edit" class="hidden bg-gray-200 hover:bg-gray-300 text-slate-700 font-semibold px-4 py-2 rounded-xl text-sm transition-colors" data-i18n="btn-customer-cancel">إلغاء</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center bg-gray-50/50 dark:bg-slate-950/20">
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-magnifying-glass absolute right-4 top-3 text-slate-400 text-sm"></i>
+                                <input type="text" id="search-customers" class="w-full pr-10 pl-4 py-2 text-sm bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100">
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table id="customers-table" class="w-full text-right border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-gray-100 dark:border-slate-800">
+                                        <th class="p-4" data-i18n="th-cust-name">الاسم</th>
+                                        <th class="p-4" data-i18n="th-cust-phone">الهاتف</th>
+                                        <th class="p-4" data-i18n="th-cust-nid">الرقم القومي</th>
+                                        <th class="p-4 text-center" data-i18n="th-cust-actions">العمليات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="customers-table-body" class="divide-y divide-gray-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+                                    <tr>
+                                        <td colspan="4" class="p-8 text-center text-slate-400 dark:text-slate-600"><i class="fa-solid fa-spinner fa-spin ml-2"></i>جاري تحميل العملاء من Firebase...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-contracts" class="tab-content space-y-6">
+                <div class="flex justify-between items-center border-b border-gray-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-white" data-i18n="title-contracts">إدارة العقود الذكية</h2>
+                        <p class="text-sm text-slate-500 mt-0.5" data-i18n="contract-sub">إنشاء ومتابعة عقود التشغيل والعدادات والنسب المالية</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm space-y-4 max-h-[85vh] overflow-y-auto">
+                        <h3 id="contract-form-title" class="font-bold text-slate-700 dark:text-slate-300 text-sm border-b border-gray-100 dark:border-slate-800 pb-2" data-i18n="contract-form-title-add">إنشاء عقد جديد</h3>
+                        
+                        <form id="contract-form" class="space-y-4">
+                            <input type="hidden" id="contract-id"> 
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-serial">رقم العقد (تلقائي)</label>
+                                <input type="text" id="contract-serial" readonly placeholder="سيتم توليده تلقائياً" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-100 dark:bg-slate-950/50 text-slate-500 text-sm cursor-not-allowed font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-customer">العميل المستأجر</label>
+                                <select id="contract-customer-select" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                    <option value="" data-i18n="opt-cust-prompt">-- اختر العميل --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-car">السيارة المطلوبة</label>
+                                <select id="contract-car-select" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                    <option value="" data-i18n="opt-car-prompt">-- اختر السيارة --</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-duration-type">نوع المدة</label>
+                                    <select id="contract-duration-type" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                        <option value="limited">أيام محددة</option>
+                                        <option value="open">مفتوح</option>
+                                    </select>
+                                </div>
+                                <div id="div-contract-days">
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-days">عدد الأيام</label>
+                                    <input type="number" id="contract-days-count" min="1" value="1" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-day-price">سعر اليوم للعميل</label>
+                                    <input type="number" id="contract-day-price" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-profit-rate">نسبة ربح المكتب (%)</label>
+                                    <input type="number" id="contract-office-profit-rate" required min="0" max="100" value="10" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-slate-950/40 p-3 rounded-xl border border-gray-100 dark:border-slate-800/80 space-y-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="lbl-contract-counter-type">حالة العداد</label>
+                                        <select id="contract-counter-type" required class="w-full px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none text-xs">
+                                            <option value="locked">عداد مقفول</option>
+                                            <option value="open">عداد مفتوح</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="lbl-contract-km-start">كم قبل التشغيل</label>
+                                        <input type="number" id="contract-km-start" required class="w-full px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none text-xs">
+                                    </div>
+                                </div>
+                                <div id="div-counter-locked-details" class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="lbl-contract-km-allowed">كم المسموح يومياً</label>
+                                        <input type="number" id="contract-km-allowed" value="150" class="w-full px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none text-xs">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-400 mb-1" data-i18n="lbl-contract-km-extra-price">سعر كم الزائد</label>
+                                        <input type="number" id="contract-km-extra-price" value="5" class="w-full px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none text-xs">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 border-t border-gray-100 dark:border-slate-800 pt-2">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-paid">المدفوع من الحساب</label>
+                                    <input type="number" id="contract-amount-paid" required min="0" value="0" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-contract-rest">باقي الحساب للعقد</label>
+                                    <input type="number" id="contract-amount-rest" readonly value="0" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-100 dark:bg-slate-950 text-slate-500 focus:outline-none text-sm font-mono cursor-not-allowed">
+                                </div>
+                            </div>
+                            <div class="flex space-x-2 space-x-reverse pt-2">
+                                <button type="submit" id="btn-save-contract" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors shadow-lg shadow-blue-500/10" data-i18n="btn-contract-save">إصدار وحفظ العقد المعلق</button>
+                                <button type="button" id="btn-cancel-contract-edit" class="hidden bg-gray-200 hover:bg-gray-300 text-slate-700 font-semibold px-4 py-2 rounded-xl text-sm transition-colors" data-i18n="btn-contract-cancel">إلغاء</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center bg-gray-50/50 dark:bg-slate-950/20">
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-magnifying-glass absolute right-4 top-3 text-slate-400 text-sm"></i>
+                                <input type="text" id="search-contracts" class="w-full pr-10 pl-4 py-2 text-sm bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100">
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table id="contracts-table" class="w-full text-right border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-gray-100 dark:border-slate-800">
+                                        <th class="p-4" data-i18n="th-cont-serial">رقم العقد</th>
+                                        <th class="p-4" data-i18n="th-cont-cust">العميل</th>
+                                        <th class="p-4" data-i18n="th-cont-car">السيارة</th>
+                                        <th class="p-4" data-i18n="th-cont-details">المدة والعداد</th>
+                                        <th class="p-4" data-i18n="th-cont-money">المالية (مدفوع/باقي)</th>
+                                        <th class="p-4" data-i18n="th-cont-status">الحالة</th>
+                                        <th class="p-4 text-center" data-i18n="th-cont-actions">العمليات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="contracts-table-body" class="divide-y divide-gray-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+                                    <tr>
+                                        <td colspan="7" class="p-8 text-center text-slate-400 dark:text-slate-600"><i class="fa-solid fa-spinner fa-spin ml-2"></i>جاري تحميل العقود من Firebase...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-payments" class="tab-content space-y-6">
+                <div class="flex justify-between items-center border-b border-gray-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-white" data-i18n="title-payments">سجل المدفوعات والخزنة</h2>
+                        <p class="text-sm text-slate-500 mt-0.5" data-i18n="payments-sub">متابعة دفعات ومقبوضات عقود التأجير المسجلة</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm space-y-4">
+                        <h3 id="payment-form-title" class="font-bold text-slate-700 dark:text-slate-300 text-sm border-b border-gray-100 dark:border-slate-800 pb-2" data-i18n="payment-form-title-add">تسجيل دفعة جديدة للشركة</h3>
+                        
+                        <form id="payment-form" class="space-y-3">
+                            <input type="hidden" id="payment-id"> 
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-payment-contract">ربط بالعقد (الرقم التسلسلي)</label>
+                                <select id="payment-contract-select" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                    <option value="" data-i18n="opt-contract-prompt">-- اختر العقد المراد التحصيل له --</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-payment-amount">المبلغ المستلم (EGP)</label>
+                                <input type="number" id="payment-amount" required min="1" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-payment-date">تاريخ القبض</label>
+                                <input type="text" id="payment-date" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            
+                            <div class="flex space-x-2 space-x-reverse pt-2">
+                                <button type="submit" id="btn-save-payment" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors shadow-lg shadow-blue-500/10" data-i18n="btn-payment-save">تأكيد وقبض الدفعة</button>
+                                <button type="button" id="btn-cancel-payment-edit" class="hidden bg-gray-200 hover:bg-gray-300 text-slate-700 font-semibold px-4 py-2 rounded-xl text-sm transition-colors" data-i18n="btn-payment-cancel">إلغاء</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center bg-gray-50/50 dark:bg-slate-950/20">
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-magnifying-glass absolute right-4 top-3 text-slate-400 text-sm"></i>
+                                <input type="text" id="search-payments" class="w-full pr-10 pl-4 py-2 text-sm bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100">
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table id="payments-table" class="w-full text-right border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-gray-100 dark:border-slate-800">
+                                        <th class="p-4" data-i18n="th-pay-serial">رقم العقد</th>
+                                        <th class="p-4" data-i18n="th-pay-cust">العميل المستأجر</th>
+                                        <th class="p-4" data-i18n="th-pay-amount">المبلغ المقبوض</th>
+                                        <th class="p-4" data-i18n="th-pay-date">تاريخ المعاملة</th>
+                                        <th class="p-4 text-center" data-i18n="th-pay-actions">العمليات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="payments-table-body" class="divide-y divide-gray-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+                                    <tr>
+                                        <td colspan="5" class="p-8 text-center text-slate-400 dark:text-slate-600"><i class="fa-solid fa-spinner fa-spin ml-2"></i>جاري تحميل سجل الخزنة من Firebase...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-expenses" class="tab-content space-y-6">
+                <div class="flex justify-between items-center border-b border-gray-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-white" data-i18n="title-expenses">المصروفات</h2>
+                        <p class="text-sm text-slate-500 mt-0.5" data-i18n="expense-sub">تسجيل ومتابعة المصروفات التشغيلية والمسؤول عنها ماليًا</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm space-y-4">
+                        <h3 id="expense-form-title" class="font-bold text-slate-700 dark:text-slate-300 text-sm border-b border-gray-100 dark:border-slate-800 pb-2" data-i18n="expense-form-title-add">تسجيل مصروف جديد</h3>
+                        
+                        <form id="expense-form" class="space-y-3">
+                            <input type="hidden" id="expense-id"> 
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-expense-title">بند المصروف</label>
+                                <input type="text" id="expense-title" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-expense-payer">على حساب من؟</label>
+                                <select id="expense-payer" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                    <option value="company" data-i18n="opt-payer-company">الشركة نفسها</option>
+                                    <option value="owner" data-i18n="opt-payer-owner">صاحب العربية</option>
+                                    <option value="customer" data-i18n="opt-payer-customer">العميل</option>
+                                </select>
+                            </div>
+
+                            <div id="div-expense-owner-select" class="hidden">
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-expense-select-owner">اختر صاحب العربية</label>
+                                <select id="expense-owner-select" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                </select>
+                            </div>
+
+                            <div id="div-expense-customer-select" class="hidden">
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-expense-select-customer">اختر العميل المستهدف</label>
+                                <select id="expense-customer-select" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-expense-amount">المبلغ (EGP)</label>
+                                <input type="number" id="expense-amount" required min="0" step="0.01" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-expense-date">التاريخ</label>
+                                <input type="text" id="expense-date" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-expense-notes">ملاحظات</label>
+                                <textarea id="expense-notes" rows="2" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-blue-500 text-sm"></textarea>
+                            </div>
+                            
+                            <div class="flex space-x-2 space-x-reverse pt-2">
+                                <button type="submit" id="btn-save-expense" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors shadow-lg shadow-blue-500/10" data-i18n="btn-expense-save">حفظ المصروف</button>
+                                <button type="button" id="btn-cancel-expense-edit" class="hidden bg-gray-200 hover:bg-gray-300 text-slate-700 font-semibold px-4 py-2 rounded-xl text-sm transition-colors" data-i18n="btn-expense-cancel">إلغاء</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="xl:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center bg-gray-50/50 dark:bg-slate-950/20">
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-magnifying-glass absolute right-4 top-3 text-slate-400 text-sm"></i>
+                                <input type="text" id="search-expenses" class="w-full pr-10 pl-4 py-2 text-sm bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100">
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table id="expenses-table" class="w-full text-right border-collapse text-sm">
+                                <thead>
+                                    <tr class="bg-gray-50 dark:bg-slate-950/50 text-slate-500 dark:text-slate-400 font-semibold border-b border-gray-100 dark:border-slate-800">
+                                        <th class="p-4" data-i18n="th-exp-title">البند</th>
+                                        <th class="p-4" data-i18n="th-exp-payer">المسؤول عن التكلفة</th>
+                                        <th class="p-4" data-i18n="th-exp-amount">المبلغ</th>
+                                        <th class="p-4" data-i18n="th-exp-date">التاريخ</th>
+                                        <th class="p-4 text-center" data-i18n="th-exp-actions">العمليات</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="expenses-table-body" class="divide-y divide-gray-100 dark:divide-slate-800/60 text-slate-700 dark:text-slate-300">
+                                    <tr>
+                                        <td colspan="5" class="p-8 text-center text-slate-400 dark:text-slate-600"><i class="fa-solid fa-spinner fa-spin ml-2"></i>جاري تحميل المصروفات من Firebase...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 8: REPORTS (المطور كليًا للفواتير والسيارات المشروطة) -->
+            <div id="tab-reports" class="tab-content space-y-6">
+                <div class="flex justify-between items-center border-b border-gray-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-white" data-i18n="reports-title">تقارير تصفية وتجريد حساب الملاك والسيارات</h2>
+                        <p class="text-sm text-slate-500 mt-0.5" data-i18n="reports-sub">توليد نموذج تصفية مالي وحر مستقل لأي سيارة تابعة لأي مالك للفترة المحددة</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="report-filter-box">
+                    <!-- خيارات البحث والفلترة مع حقول التاريخ واختيار السيارة المحددة -->
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-700 dark:text-slate-300 text-sm border-b border-gray-100 dark:border-slate-800 pb-2" data-i18n="lbl-report-filter">تحديد خيارات التقفيل</h3>
+                        
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-report-target-type">نوع الحساب</label>
+                                <select id="report-target-type" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-sm focus:outline-none">
+                                    <option value="owner" data-i18n="opt-report-owner">صاحب العربية (مالك)</option>
+                                    <option value="customer" data-i18n="opt-report-customer">العميل (المستأجر)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-report-select-entity">اختر الشخص المسؤول</label>
+                                <select id="report-entity-select" required class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-sm focus:outline-none">
+                                </select>
+                            </div>
+                            
+                            <!-- فلتر اختيار السيارة الديناميكي المستهدف -->
+                            <div id="div-report-car-filter">
+                                <label class="block text-xs font-semibold text-slate-500 mb-1" data-i18n="lbl-report-car-filter">تحديد سيارة معينة (اختياري للمالك)</label>
+                                <select id="report-car-select" class="w-full px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-sm focus:outline-none">
+                                    <option value="" data-i18n="opt-report-all-cars">-- كل سيارات المالك --</option>
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 border-t border-gray-100 dark:border-slate-800 pt-2">
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1" data-i18n="lbl-report-start-date">من تاريخ</label>
+                                    <input type="text" id="report-start-date" class="w-full px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-400 mb-1" data-i18n="lbl-report-end-date">إلى تاريخ</label>
+                                    <input type="text" id="report-end-date" class="w-full px-3 py-1.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 text-xs focus:outline-none">
+                                </div>
+                            </div>
+
+                            <button id="btn-generate-report" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors shadow-lg shadow-blue-500/10 mt-2" data-i18n="btn-generate-report-txt">عرض كشف الحساب وتصفية الفترة</button>
+                        </div>
+                    </div>
+
+                    <!-- لوحة عرض الخلاصة المالية للكشف المختار للمعاينة -->
+                    <div class="md:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 flex flex-col justify-between">
+                        <div class="border-b border-gray-100 dark:border-slate-800 pb-3">
+                            <h4 id="report-results-title" class="font-bold text-slate-800 dark:text-white text-base" data-i18n="reports-preview-title">الملخص المالي الفوري للمعاينة</h4>
+                            <p class="text-xs text-slate-400 mt-0.5" data-i18n="reports-preview-desc">انظر أدناه للمعاينة، وبإمكانك الضغط على زر الطباعة لتوليد الإيصال النهائي للمالك فوراً.</p>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 my-6">
+                            <div class="bg-gray-50 dark:bg-slate-950/40 p-4 rounded-xl text-center border border-gray-100 dark:border-slate-800/60">
+                                <span class="text-xs text-slate-400 block font-medium" data-i18n="lbl-rep-total-earned">إجمالي مستحقات التشغيل</span>
+                                <span id="rep-total-earned" class="text-lg font-bold text-emerald-500 mt-1 block">0.00 EGP</span>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-slate-950/40 p-4 rounded-xl text-center border border-gray-100 dark:border-slate-800/60">
+                                <span class="text-xs text-slate-400 block font-medium" data-i18n="lbl-rep-total-deducted">إجمالي المصروفات المخصومة</span>
+                                <span id="rep-total-deducted" class="text-lg font-bold text-rose-500 mt-1 block">0.00 EGP</span>
+                            </div>
+                            <div class="bg-gray-50 dark:bg-slate-950/40 p-4 rounded-xl text-center border border-gray-100 dark:border-slate-800/60">
+                                <span class="text-xs text-slate-400 block font-medium" data-i18n="lbl-rep-net">صافي مستحقات المالك</span>
+                                <span id="rep-net-result" class="text-lg font-bold text-blue-500 mt-1 block">0.00 EGP</span>
+                            </div>
+                        </div>
+
+                        <div class="text-right">
+                            <button type="button" onclick="printReportInvoice()" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-100 rounded-xl text-xs font-bold border border-slate-700 shadow-sm transition-all"><i class="fa-solid fa-print ml-2"></i><span data-i18n="btn-print-report">طباعة وتقفيل كشف الحساب الرسمي</span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- [منطقة الطباعة المخصصة] نموذج الفاتورة النهائي النظيف الخالي من العشوائية للملاك والسيارات -->
+                <div id="print-invoice-area" class="bg-white text-black p-8 rounded-2xl border border-gray-200 max-w-3xl mx-auto shadow-sm">
+                    <div class="flex justify-between items-center border-b-2 border-slate-900 pb-4 mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold tracking-tight text-slate-900" data-i18n="inv-title">إيصال تصفية وتقفيل حساب تشغيل</h2>
+                            <p class="text-xs text-gray-500 mt-1 font-mono" data-i18n="inv-system-name">نظام إدارة التأجير المؤتمت - Motion X Systems</p>
+                        </div>
+                        <div class="text-left">
+                            <div class="text-xs text-gray-500" data-i18n="inv-report-date">تاريخ إصدار التقرير</div>
+                            <div class="text-sm font-bold font-mono text-slate-800" id="inv-report-now-date">-</div>
+                        </div>
+                    </div>
+
+                    <!-- بيانات المالك والفترة الزمنية حرة -->
+                    <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-gray-100 mb-6">
+                        <div class="text-xs space-y-1 text-gray-700">
+                            <div><span class="font-bold text-slate-900" data-i18n="inv-owner-name">اسم المالك / الجهة:</span> <span id="inv-owner-name" class="font-semibold text-sm text-black">-</span></div>
+                            <div><span class="font-bold text-slate-900" data-i18n="inv-rental-period">الفترة الإيجارية:</span> <span data-i18n="inv-from">من</span> <span id="inv-date-from" class="font-mono text-black">-</span> <span data-i18n="inv-to">إلى</span> <span id="inv-date-to" class="font-mono text-black">-</span></div>
+                        </div>
+                        <div class="text-xs space-y-1 text-gray-700 border-r border-gray-200 pr-4">
+                            <div><span class="font-bold text-slate-900" data-i18n="inv-car-target">السيارة المستهدفة:</span> <span id="inv-car-info" class="font-semibold text-black">-</span></div>
+                            <div><span class="font-bold text-slate-900" data-i18n="inv-plate">رقم اللوحة المرورية:</span> <span id="inv-car-plate" class="font-mono font-bold text-blue-600 text-sm">-</span></div>
+                        </div>
+                    </div>
+
+                    <!-- تفاصيل العداد والمقاييس المستهلكة -->
+                    <div class="mb-6">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-900 mb-2 border-b pb-1" data-i18n="inv-km-section">مؤشرات المسافات وقراءات العداد (KM)</h4>
+                        <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                            <div class="bg-gray-50 p-2 rounded">
+                                <span class="text-gray-500 block" data-i18n="inv-km-start">عداد البدء عند الخروج</span>
+                                <span id="inv-km-start" class="font-mono font-bold text-black text-sm">0 كم</span>
+                            </div>
+                            <div class="bg-gray-50 p-2 rounded">
+                                <span class="text-gray-500 block" data-i18n="inv-km-end">عداد الإغلاق عند العودة</span>
+                                <span id="inv-km-end" class="font-mono font-bold text-black text-sm">0 كم</span>
+                            </div>
+                            <div class="bg-gray-50 p-2 rounded">
+                                <span class="text-gray-500 block" data-i18n="inv-km-total">إجمالي المسافة المقطوعة</span>
+                                <span id="inv-km-total" class="font-mono font-bold text-blue-600 text-sm">0 كم</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- بنود التجريد والحساب المالي للسيارة -->
+                    <div class="space-y-2 border-t-2 border-slate-100 pt-4 text-xs text-gray-800">
+                        <div class="flex justify-between p-1"><span data-i18n="inv-calc-gross">إجمالي قيمة إيجار السيارة الإجمالية (Gross Rental):</span><span id="inv-calc-gross" class="font-mono font-bold text-black">0.00 EGP</span></div>
+                        <div class="flex justify-between p-1 text-rose-600 font-medium"><span data-i18n="inv-calc-office">خصم عمولة المكتب المقررة بالعقود (-):</span><span id="inv-calc-office-profit" class="font-mono font-bold">0.00 EGP</span></div>
+                        <div class="flex justify-between p-1 text-rose-600 font-medium"><span data-i18n="inv-calc-expenses">خصم مصروفات صيانة وإصلاحات تابعة للمالك (-):</span><span id="inv-calc-expenses" class="font-mono font-bold">0.00 EGP</span></div>
+                        <div class="flex justify-between p-1 text-emerald-600 font-medium border-b pb-2"><span data-i18n="inv-calc-extra-km">إضافة مبالغ كم زائد محصلة لصالح المالك (+):</span><span id="inv-calc-extra-km" class="font-mono font-bold">0.00 EGP</span></div>
+                        <div class="flex justify-between p-3 bg-slate-900 text-white rounded-xl text-sm font-bold mt-4">
+                            <span data-i18n="inv-calc-net">صافي المبالغ المستحقة والنهائية والجاهزة للصرف للمالك:</span>
+                            <span id="inv-calc-net" class="font-mono text-base text-white">0.00 EGP</span>
+                        </div>
+                    </div>
+
+                    <!-- مناطق اعتماد التواقيع -->
+                    <div class="grid grid-cols-2 gap-4 text-center text-xs mt-12 pt-8 border-t border-dashed border-gray-300">
+                        <div>
+                            <div class="text-gray-500" data-i18n="inv-sig-office">توقيع مسؤول الحسابات بالمكتب</div>
+                            <div class="h-12"></div>
+                            <div class="font-bold text-slate-800">.................................</div>
+                        </div>
+                        <div>
+                            <div class="text-gray-500" data-i18n="inv-sig-owner">توقيع واعتماد المالك المستلم</div>
+                            <div class="h-12"></div>
+                            <div class="font-bold text-slate-800">.................................</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-settings" class="tab-content space-y-6"><h2 class="text-xl font-bold text-slate-800 dark:text-white" data-i18n="title-settings">إعدادات النظام</h2></div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCUUDMbp9A-FoyH4RcGM_OxtAw_hkCQjqI",
+            authDomain: "motion-x-988bd.firebaseapp.com",
+            projectId: "motion-x-988bd",
+            storageBucket: "motion-x-988bd.firebasestorage.app",
+            messagingSenderId: "920087459621",
+            appId: "1:920087459621:web:ccbaf5b03ab7e303c90ccc",
+            measurementId: "G-DW11ZS1RPW"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const translations = {
+            ar: {
+                "nav-home": "الرئيسية", "nav-owners": "الملاك", "nav-cars": "السيارات", "nav-customers": "العملاء",
+                "nav-contracts": "العقود", "nav-payments": "المدفوعات", "nav-expenses": "المصروفات", "nav-reports": "التقارير", "nav-settings": "الإعدادات",
+                "title-dashboard": "لوحة التحكم الرئيسية", "title-owners": "إدارة ملاك السيارات", "title-cars": "إدارة السيارات",
+                "title-customers": "إدارة العملاء", "title-contracts": "إدارة العقود", "title-payments": "سجل المدفوعات",
+                "title-expenses": "المصروفات", "title-reports": "التقارير الشاملة", "title-settings": "إعدادات النظام",
+                "user-admin": "مسؤول النظام", "stat-cars": "إجمالي السيارات", "stat-owners": "عدد الملاك",
+                "stat-customers": "عدد العملاء", "stat-contracts": "عدد العقود", "stat-revenues": "إجمالي الإيرادات",
+                "stat-expenses-total": "إجمالي المصروفات", "stat-profit": "صافي الأرباح",
+                "owner-sub": "إضافة، تعديل، حذف ومتابعة حسابات الملاك", "form-title-add": "إضافة مالك جديد",
+                "lbl-owner-name": "اسم المالك الكامل", "lbl-owner-phone": "رقم الهاتف", "lbl-owner-nid": "الرقم القومي (14 رقم)",
+                "lbl-owner-address": "العنوان", "lbl-owner-notes": "ملاحظات", "btn-save": "حفظ البيانات", "btn-cancel": "إلغاء",
+                "search-placeholder": "ابحث باسم المالك أو الهاتف أو الرقم القومي...",
+                "th-name": "الاسم", "th-phone": "الهاتف", "th-nid": "الرقم القومي", "th-address": "العنوان", "th-actions": "العمليات",
+                "car-sub": "إضافة ومتابعة أسطول السيارات وربطها بالملاك الحاليين", "car-form-title-add": "إضافة سيارة جديدة",
+                "lbl-car-owner": "اختر مالك السيارة", "lbl-car-brand": "الماركة (مثال: Toyota)", "lbl-car-model": "الموديل (مثال: Corolla)",
+                "lbl-car-year": "سنة الصنع (مثال: 2024)", "lbl-car-plate": "رقم اللوحة (حروف وأرقام)", "btn-car-save": "حفظ السيارة",
+                "btn-car-cancel": "إلغاء", "opt-loading": "جاري تحميل الملاك...", "search-cars-placeholder": "ابحث بالماركة، الموديل، رقم اللوحة أو اسم المالك...",
+                "th-car-owner": "المالك", "th-car-brand": "الماركة", "th-car-model": "الموديل", "th-car-year": "السنة", "th-car-plate": "رقم اللوحة", "th-car-actions": "العمليات",
+                "opt-select-prompt": "-- اختر المالك من هنا --",
+                "customer-sub": "إضافة ومتابعة بيانات المستأجرين", "customer-form-title-add": "إضافة عميل جديد",
+                "lbl-customer-name": "اسم العميل الكامل", "lbl-customer-phone": "رقم الهاتف", "lbl-customer-nid": "الرقم القومي (14 رقم)",
+                "btn-customer-save": "حفظ العميل", "btn-customer-cancel": "إلغاء",
+                "search-customers-placeholder": "ابحث باسم العميل، الهاتف، أو الرقم القومي...",
+                "th-cust-name": "الاسم", "th-cust-phone": "الهاتف", "th-cust-nid": "الرقم القومي", "th-cust-actions": "العمليات",
+                "contract-sub": "إنشاء ومتابعة عقود التشغيل والعدادات والنسب المالية", "contract-form-title-add": "إنشاء عقد جديد",
+                "lbl-contract-serial": "رقم العقد (تلقائي)", "lbl-contract-customer": "العميل المستأجر", "lbl-contract-car": "السيارة المطلوبة",
+                "lbl-contract-duration-type": "نوع المدة", "lbl-contract-days": "عدد الأيام", "lbl-contract-day-price": "سعر اليوم للعميل",
+                "lbl-contract-profit-rate": "نسبة ربح المكتب (%)", "lbl-contract-counter-type": "حالة العداد", "lbl-contract-km-start": "كم قبل التشغيل",
+                "lbl-contract-km-allowed": "كم المسموح يومياً", "lbl-contract-km-extra-price": "سعر كم الزائد", "lbl-contract-paid": "المدفوع من الحساب",
+                "lbl-contract-rest": "باقي الحساب للعقد", "btn-contract-save": "إصدار وحفظ العقد المعلق", "btn-contract-cancel": "إلغاء",
+                "opt-cust-prompt": "-- اختر العميل --", "opt-car-prompt": "-- اختر السيارة --",
+                "search-contracts-placeholder": "ابحث باسم العميل، رقم العقد أو الماركة...",
+                "th-cont-serial": "رقم العقد", "th-cont-cust": "العميل", "th-cont-car": "السيارة", "th-cont-details": "المدة والعداد", "th-cont-money": "المالية (مدفوع/باقي)", "th-cont-status": "الحالة", "th-cont-actions": "العمليات",
+                "expense-sub": "تسجيل ومتابعة المصروفات التشغيلية والمسؤول عنها ماليًا", "expense-form-title-add": "تسجيل مصروف جديد",
+                "lbl-expense-title": "بند المصروف", "lbl-expense-payer": "على حساب من؟", "lbl-expense-amount": "المبلغ (EGP)", "lbl-expense-date": "التاريخ", "lbl-expense-notes": "ملاحظات",
+                "lbl-expense-select-owner": "اختر صاحب العربية", "lbl-expense-select-customer": "اختر العميل المستهدف",
+                "opt-payer-owner": "صاحب العربية", "opt-payer-customer": "العميل", "opt-payer-company": "الشركة نفسها",
+                "search-expenses-placeholder": "ابحث في المصروفات...", "btn-expense-save": "حفظ المصروف", "btn-expense-cancel": "إلغاء",
+                "th-exp-title": "البند", "th-exp-payer": "المسؤول عن التكلفة", "th-exp-amount": "المبلغ", "th-exp-date": "التاريخ", "th-exp-actions": "العمليات",
+                "opt-select-owner-prompt": "-- اختر المالك المسؤول --", "opt-select-cust-prompt": "-- اختر العميل المسؤول --",
+                "payments-sub": "متابعة دفعات ومقبوضات عقود التأجير المسجلة", "payment-form-title-add": "تسجيل دفعة جديدة للشركة",
+                "lbl-payment-contract": "ربط بالعقد (الرقم التسلسلي)", "lbl-payment-amount": "المبلغ المستلم (EGP)", "lbl-payment-date": "تاريخ القبض",
+                "btn-payment-save": "تأكيد وقبض الدفعة", "btn-payment-cancel": "إلغاء", "opt-contract-prompt": "-- اختر العقد المراد التحصيل له --",
+                "search-payments-placeholder": "ابحث في سجل الخزنة...", "th-pay-serial": "رقم العقد", "th-pay-cust": "العميل المستأجر", "th-pay-amount": "المبلغ المقبوض", "th-pay-date": "تاريخ المعاملة", "th-pay-actions": "العمليات",
+                "reports-title": "تقارير تصفية وتجريد حساب الملاك والسيارات", "reports-sub": "استعراض كشوفات الحساب وصافي أرباح ملاك السيارات والعملاء في أي فترة زمنية تختارها", "lbl-report-filter": "تحديد فترة الحساب", "lbl-report-target-type": "نوع الحساب", "lbl-report-select-entity": "اختر الشخص المسؤول", "opt-report-owner": "صاحب العربية (مالك)", "opt-report-customer": "العميل (المستأجر)", "lbl-report-car-filter": "تحديد سيارة معينة (اختياري للمالك)", "opt-report-all-cars": "-- كل سيارات المالك --", "lbl-report-start-date": "من تاريخ", "lbl-report-end-date": "إلى تاريخ", "btn-generate-report-txt": "عرض كشف الحساب وتصفية الفترة", "reports-preview-title": "الملخص المالي الفوري للمعاينة", "reports-preview-desc": "انظر أدناه للمعاينة، وبإمكانك الضغط على زر الطباعة لتوليد الإيصال النهائي للمالك فوراً.", "lbl-rep-total-earned": "إجمالي مستحقات التشغيل", "lbl-rep-total-deducted": "إجمالي المصروفات المخصومة", "lbl-rep-net": "الصافي النهائي للمالك", "btn-print-report": "طباعة وتقفيل كشف الحساب الرسمي", "inv-title": "إيصال تصفية وتقفيل حساب تشغيل", "inv-system-name": "نظام إدارة التأجير المؤتمت - Motion X Systems", "inv-report-date": "تاريخ إصدار التقرير", "inv-owner-name": "اسم المالك / الجهة:", "inv-rental-period": "الفترة الإيجارية:", "inv-from": "من", "inv-to": "إلى", "inv-car-target": "السيارة المستهدفة:", "inv-plate": "رقم اللوحة المرورية:", "inv-km-section": "مؤشرات المسافات وقراءات العداد (KM)", "inv-km-start": "عداد البدء عند الخروج", "inv-km-end": "عداد الإغلاق عند العودة", "inv-km-total": "إجمالي المسافة المقطوعة", "inv-calc-gross": "إجمالي قيمة إيجار السيارة الإجمالية (Gross Rental):", "inv-calc-office": "خصم عمولة المكتب المقررة بالعقود (-):", "inv-calc-expenses": "خصم مصروفات صيانة وإصلاحات تابعة للمالك (-):", "inv-calc-extra-km": "إضافة مبالغ كم زائد محصلة لصالح المالك (+):", "inv-calc-net": "صافي المبالغ المستحقة والنهائية والجاهزة للصرف للمالك:", "inv-sig-office": "توقيع مسؤول الحسابات بالمكتب", "inv-sig-owner": "توقيع واعتماد المالك المستلم", "rep-date-start-default": "بداية التشغيل", "rep-date-now": "الآن", "rep-all-owner-cars": "كل السيارات التابعة للمالك", "rep-multi-plate": "متعدد", "rep-customer-statement": "كشف عميل مستأجر", "rep-km-unit": "كم", "rep-pending": "معلق"
+            },
+            en: {
+                "nav-home": "Dashboard", "nav-owners": "Owners", "nav-cars": "Cars", "nav-customers": "Customers",
+                "nav-contracts": "Contracts", "nav-payments": "Payments", "nav-expenses": "Expenses", "nav-reports": "Reports", "nav-settings": "Settings",
+                "title-dashboard": "Main Dashboard", "title-owners": "Owners Hub", "title-cars": "Fleet Gallery",
+                "title-customers": "Customers Index", "title-contracts": "Contracts Board", "title-payments": "Payments Ledger",
+                "title-expenses": "Expenses Outflow", "title-reports": "Analytics & Reports", "title-settings": "Preferences",
+                "user-admin": "System Admin", "stat-cars": "Total Cars", "stat-owners": "Total Owners",
+                "stat-customers": "Total Customers", "stat-contracts": "Total Contracts", "stat-revenues": "Total Revenues",
+                "stat-expenses-total": "Total Expenses", "stat-profit": "Net Profit",
+                "owner-sub": "Add, edit, delete and track fleet owners accounts", "form-title-add": "Add New Owner",
+                "lbl-owner-name": "Full Owner Name", "lbl-owner-phone": "Phone Number", "lbl-owner-nid": "National ID (14 digits)",
+                "lbl-owner-address": "Address", "lbl-owner-notes": "Notes", "btn-save": "Save Data", "btn-cancel": "Cancel",
+                "search-placeholder": "Search by name, phone or national ID...",
+                "th-name": "Name", "th-phone": "Phone", "th-nid": "National ID", "th-address": "Address", "th-actions": "Actions",
+                "car-sub": "Add and manage fleet vehicles and connect them to active owners", "car-form-title-add": "Add New Car",
+                "lbl-car-owner": "Select Car Owner", "lbl-car-brand": "Brand (e.g. Toyota)", "lbl-car-model": "Model (e.g. Corolla)",
+                "lbl-car-year": "Year of Manufacture (e.g. 2024)", "lbl-car-plate": "Plate Number (Letters & Numbers)", "btn-car-save": "Save Car",
+                "btn-car-cancel": "Cancel", "opt-loading": "Loading Owners...", "search-cars-placeholder": "Search by brand, model, plate or owner name...",
+                "th-car-owner": "Owner", "th-car-brand": "Brand", "th-car-model": "Model", "th-car-year": "Year", "th-car-plate": "Plate No.", "th-car-actions": "Actions",
+                "opt-select-prompt": "-- Select Owner From Here --",
+                "customer-sub": "Add and track renter profiles", "customer-form-title-add": "Add New Customer",
+                "lbl-customer-name": "Full Customer Name", "lbl-customer-phone": "Phone Number", "lbl-customer-nid": "National ID (14 digits)",
+                "btn-customer-save": "Save Customer", "btn-customer-cancel": "Cancel",
+                "search-customers-placeholder": "Search by name, phone, or national ID...",
+                "th-cust-name": "Name", "th-cust-phone": "Phone", "th-nid": "National ID", "th-cust-actions": "Actions",
+                "contract-sub": "Issue and track operations contracts, mileage and office ratios", "contract-form-title-add": "Create Contract",
+                "lbl-contract-serial": "Contract No. (Auto)", "lbl-contract-customer": "Renter Customer", "lbl-contract-car": "Selected Car",
+                "lbl-contract-duration-type": "Duration Type", "lbl-contract-days": "Days Count", "lbl-contract-day-price": "Daily Price to Customer",
+                "lbl-contract-profit-rate": "Office Profit Rate (%)", "lbl-contract-counter-type": "Counter Mode", "lbl-contract-km-start": "KM Before Operation",
+                "lbl-contract-km-allowed": "Allowed KM / Day", "lbl-contract-km-extra-price": "Extra KM Price", "lbl-contract-paid": "Amount Paid",
+                "lbl-contract-rest": "Contract Balance Remaining", "btn-contract-save": "Issue Pending Contract", "btn-contract-cancel": "Cancel",
+                "opt-cust-prompt": "-- Select Customer --", "opt-car-prompt": "-- Select Car --",
+                "search-contracts-placeholder": "Search by customer, contract serial or brand...",
+                "th-cont-serial": "Contract No.", "th-cont-cust": "Customer", "th-cont-car": "Vehicle", "th-cont-details": "Duration & KM", "th-cont-money": "Financials (Paid/Rest)", "th-cont-status": "Status", "th-cont-actions": "Actions",
+                "expense-sub": "Track operations expenses and fiscal responsibilities", "expense-form-title-add": "Log Expense",
+                "lbl-expense-title": "Expense Title", "lbl-expense-payer": "Charged To?", "lbl-expense-amount": "Amount (EGP)", "lbl-expense-date": "Date", "lbl-expense-notes": "Notes",
+                "lbl-expense-select-owner": "Select Car Owner", "lbl-expense-select-customer": "Select Target Customer",
+                "opt-payer-owner": "Car Owner", "opt-payer-customer": "Customer", "opt-payer-company": "Company Office",
+                "search-expenses-placeholder": "Search expenses...", "btn-expense-save": "Save Expense", "btn-expense-cancel": "Cancel",
+                "th-exp-title": "Title", "th-exp-payer": "Responsibility", "th-exp-amount": "Amount", "th-exp-date": "Date", "th-exp-actions": "Actions",
+                "opt-select-owner-prompt": "-- Select Responsible Owner --", "opt-select-cust-prompt": "-- Select Responsible Renter --",
+                "payments-sub": "Track and view incoming cash flow from operations", "payment-form-title-add": "Collect New Payment",
+                "lbl-payment-contract": "Link to Contract (Serial No.)", "lbl-payment-amount": "Amount Collected (EGP)", "lbl-payment-date": "Collection Date",
+                "btn-payment-save": "Confirm & Receive Payment", "btn-payment-cancel": "Cancel", "opt-contract-prompt": "-- Select Contract To Collect For --",
+                "search-payments-placeholder": "Search cashier logs...", "th-pay-serial": "Contract No.", "th-pay-cust": "Renter Name", "th-pay-amount": "Amount Received", "th-pay-date": "Transaction Date", "th-pay-actions": "Actions",
+                "reports-title": "Owner & Vehicle Settlement Reports", "reports-sub": "Review statements and balances over open flexible dates", "lbl-report-filter": "Statement Timeline", "lbl-report-target-type": "Account Type", "lbl-report-select-entity": "Select Responsible Person", "opt-report-owner": "Car Owner", "opt-report-customer": "Customer (Renter)", "lbl-report-car-filter": "Select Specific Car (Optional for Owner)", "opt-report-all-cars": "-- All Owner's Cars --", "lbl-report-start-date": "From Date", "lbl-report-end-date": "To Date", "btn-generate-report-txt": "Generate & Filter Statement", "reports-preview-title": "Instant Financial Preview Summary", "reports-preview-desc": "See the preview below. Click Print to generate the final owner receipt instantly.", "lbl-rep-total-earned": "Total Gross Earned", "lbl-rep-total-deducted": "Total Deductions", "lbl-rep-net": "Net Closing Balance", "btn-print-report": "Print Official Account Statement", "inv-title": "Operation Account Settlement Receipt", "inv-system-name": "Automated Rental Management System - Motion X Systems", "inv-report-date": "Report Issue Date", "inv-owner-name": "Owner / Entity Name:", "inv-rental-period": "Rental Period:", "inv-from": "From", "inv-to": "To", "inv-car-target": "Target Vehicle:", "inv-plate": "License Plate:", "inv-km-section": "Distance & Odometer Readings (KM)", "inv-km-start": "Start Odometer at Departure", "inv-km-end": "End Odometer on Return", "inv-km-total": "Total Distance Traveled", "inv-calc-gross": "Total Gross Rental Value:", "inv-calc-office": "Office Commission Deduction (-):", "inv-calc-expenses": "Owner Maintenance & Repair Deductions (-):", "inv-calc-extra-km": "Extra KM Charges for Owner (+):", "inv-calc-net": "Net Amount Due to Owner:", "inv-sig-office": "Office Accountant Signature", "inv-sig-owner": "Owner Receipt & Approval Signature", "rep-date-start-default": "Operation Start", "rep-date-now": "Now", "rep-all-owner-cars": "All Owner's Vehicles", "rep-multi-plate": "Multiple", "rep-customer-statement": "Renter Customer Statement", "rep-km-unit": "KM", "rep-pending": "Pending"
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const langToggleBtn = document.getElementById('lang-toggle');
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            const tabContents = document.querySelectorAll('.tab-content');
+            const pageTitle = document.getElementById('page-title');
+
+            const ownerForm = document.getElementById('owner-form');
+            const ownersTableBody = document.getElementById('owners-table-body');
+            const searchOwnersInput = document.getElementById('search-owners');
+            let allOwners = [];
+
+            const carForm = document.getElementById('car-form');
+            const carOwnerSelect = document.getElementById('car-owner-select');
+            const carsTableBody = document.getElementById('cars-table-body');
+            const searchCarsInput = document.getElementById('search-cars');
+            let allCars = [];
+
+            const customerForm = document.getElementById('customer-form');
+            const customersTableBody = document.getElementById('customers-table-body');
+            const searchCustomersInput = document.getElementById('search-customers');
+            let allCustomers = [];
+
+            const contractForm = document.getElementById('contract-form');
+            const contractCustomerSelect = document.getElementById('contract-customer-select');
+            const contractCarSelect = document.getElementById('contract-car-select');
+            const contractDurationType = document.getElementById('contract-duration-type');
+            const contractDaysCount = document.getElementById('contract-days-count');
+            const contractCounterType = document.getElementById('contract-counter-type');
+            const contractDayPriceInput = document.getElementById('contract-day-price');
+            const contractAmountPaidInput = document.getElementById('contract-amount-paid');
+            const contractAmountRestInput = document.getElementById('contract-amount-rest');
+            const contractsTableBody = document.getElementById('contracts-table-body');
+            const searchContractsInput = document.getElementById('search-contracts');
+            let allContracts = [];
+
+            const expenseForm = document.getElementById('expense-form');
+            const expensePayerSelect = document.getElementById('expense-payer');
+            const expenseOwnerSelect = document.getElementById('expense-owner-select');
+            const expenseCustomerSelect = document.getElementById('expense-customer-select');
+            const expensesTableBody = document.getElementById('expenses-table-body');
+            const searchExpensesInput = document.getElementById('search-expenses');
+            let allExpenses = [];
+
+            const paymentForm = document.getElementById('payment-form');
+            const paymentContractSelect = document.getElementById('payment-contract-select');
+            const paymentsTableBody = document.getElementById('payments-table-body');
+            const searchPaymentsInput = document.getElementById('search-payments');
+            let allPayments = [];
+
+            const reportTargetType = document.getElementById('report-target-type');
+            const reportEntitySelect = document.getElementById('report-entity-select');
+            const reportCarSelect = document.getElementById('report-car-select');
+            const reportStartDateInput = document.getElementById('report-start-date');
+            const reportEndDateInput = document.getElementById('report-end-date');
+            const btnGenerateReport = document.getElementById('btn-generate-report');
+            const reportTableRows = document.getElementById('report-table-rows');
+
+            // 1. إدارة الوضع الفاتح والداكن وتنسيق مكتبة الـ Calendar (Flatpickr)
+            const flatpickrDarkStylesheet = document.getElementById('flatpickr-dark-theme');
+            function updateFlatpickrTheme(isDark) {
+                if (flatpickrDarkStylesheet) {
+                    flatpickrDarkStylesheet.disabled = !isDark;
+                }
+            }
+
+            function toggleTheme() {
+                const isDark = document.documentElement.classList.contains('dark');
+                if (isDark) {
+                    document.documentElement.classList.remove('dark');
+                    themeIcon.className = "fa-solid fa-moon text-lg text-slate-500";
+                    localStorage.setItem('theme', 'light');
+                    updateFlatpickrTheme(false);
+                } else {
+                    document.documentElement.classList.add('dark');
+                    themeIcon.className = "fa-solid fa-sun text-lg text-amber-500";
+                    localStorage.setItem('theme', 'dark');
+                    updateFlatpickrTheme(true);
+                }
+            }
+            themeToggleBtn.addEventListener('click', toggleTheme);
+            if (localStorage.getItem('theme') === 'light') {
+                document.documentElement.classList.remove('dark');
+                themeIcon.className = "fa-solid fa-moon text-lg text-slate-500";
+                updateFlatpickrTheme(false);
+            } else {
+                updateFlatpickrTheme(true);
+            }
+
+            // تهيئة وإدارة تقاويم Flatpickr
+            let fpPaymentDate, fpExpenseDate, fpReportStartDate, fpReportEndDate;
+            function initFlatpickr() {
+                const lang = localStorage.getItem('lang') || 'ar';
+                const options = {
+                    locale: lang === 'en' ? 'en' : 'ar',
+                    dateFormat: "Y-m-d",
+                    disableMobile: "true"
+                };
+
+                if (fpPaymentDate) fpPaymentDate.destroy();
+                if (fpExpenseDate) fpExpenseDate.destroy();
+                if (fpReportStartDate) fpReportStartDate.destroy();
+                if (fpReportEndDate) fpReportEndDate.destroy();
+
+                fpPaymentDate = flatpickr("#payment-date", options);
+                fpExpenseDate = flatpickr("#expense-date", options);
+                fpReportStartDate = flatpickr("#report-start-date", options);
+                fpReportEndDate = flatpickr("#report-end-date", options);
+            }
+
+            // 2. إدارة اللغات الموحدة لكل الشاشات
+            function applyLanguage(lang) {
+                localStorage.setItem('lang', lang);
+                const searchInput = document.getElementById('search-owners');
+                const searchCarsInp = document.getElementById('search-cars');
+                const searchCustInp = document.getElementById('search-customers');
+                const searchContInp = document.getElementById('search-contracts');
+                const searchExpInp = document.getElementById('search-expenses');
+                const searchPayInp = document.getElementById('search-payments');
+                const table = document.getElementById('owners-table');
+                const carsTable = document.getElementById('cars-table');
+                const custTable = document.getElementById('customers-table');
+                const contTable = document.getElementById('contracts-table');
+                const expTable = document.getElementById('expenses-table');
+                const payTable = document.getElementById('payments-table');
+                
+                if (lang === 'en') {
+                    document.documentElement.setAttribute('dir', 'ltr');
+                    document.documentElement.setAttribute('lang', 'en');
+                    document.documentElement.classList.add('lang-en');
+                    langToggleBtn.innerText = 'AR';
+                    document.querySelectorAll('.tab-btn span').forEach(el => { el.classList.remove('right-24'); el.classList.add('left-24'); });
+                    if(searchInput) searchInput.placeholder = translations.en["search-placeholder"];
+                    if(searchCarsInp) searchCarsInp.placeholder = translations.en["search-cars-placeholder"];
+                    if(searchCustInp) searchCustInp.placeholder = translations.en["search-customers-placeholder"];
+                    if(searchContInp) searchContInp.placeholder = translations.en["search-contracts-placeholder"];
+                    if(searchExpInp) searchExpInp.placeholder = translations.en["search-expenses-placeholder"];
+                    if(searchPayInp) searchPayInp.placeholder = translations.en["search-payments-placeholder"];
+                    if(table) table.className = "w-full text-left border-collapse text-sm";
+                    if(carsTable) carsTable.className = "w-full text-left border-collapse text-sm";
+                    if(custTable) custTable.className = "w-full text-left border-collapse text-sm";
+                    if(contTable) contTable.className = "w-full text-left border-collapse text-sm";
+                    if(expTable) expTable.className = "w-full text-left border-collapse text-sm";
+                    if(payTable) payTable.className = "w-full text-left border-collapse text-sm";
+                } else {
+                    document.documentElement.setAttribute('dir', 'rtl');
+                    document.documentElement.setAttribute('lang', 'ar');
+                    document.documentElement.classList.remove('lang-en');
+                    langToggleBtn.innerText = 'EN';
+                    document.querySelectorAll('.tab-btn span').forEach(el => { el.classList.remove('left-24'); el.classList.add('right-24'); });
+                    if(searchInput) searchInput.placeholder = translations.ar["search-placeholder"];
+                    if(searchCarsInp) searchCarsInp.placeholder = translations.ar["search-cars-placeholder"];
+                    if(searchCustInp) searchCustInp.placeholder = translations.ar["search-customers-placeholder"];
+                    if(searchContInp) searchContInp.placeholder = translations.ar["search-contracts-placeholder"];
+                    if(searchExpInp) searchExpInp.placeholder = translations.ar["search-expenses-placeholder"];
+                    if(searchPayInp) searchPayInp.placeholder = translations.ar["search-payments-placeholder"];
+                    if(table) table.className = "w-full text-right border-collapse text-sm";
+                    if(carsTable) carsTable.className = "w-full text-right border-collapse text-sm";
+                    if(custTable) custTable.className = "w-full text-right border-collapse text-sm";
+                    if(contTable) contTable.className = "w-full text-right border-collapse text-sm";
+                    if(expTable) expTable.className = "w-full text-right border-collapse text-sm";
+                    if(payTable) payTable.className = "w-full text-right border-collapse text-sm";
+                }
+
+                document.querySelectorAll('[data-i18n]').forEach(element => {
+                    const key = element.getAttribute('data-i18n');
+                    if (translations[lang] && translations[lang][key]) element.innerText = translations[lang][key];
+                });
+
+                updateOwnersDropdown(allOwners);
+                updateContractsDropdowns();
+                updateExpensesDropdowns();
+                updatePaymentsDropdowns();
+                updateReportsDropdown();
+
+                const invReportDate = document.getElementById('inv-report-now-date');
+                if (invReportDate && invReportDate.innerText !== '-' && reportEntitySelect && reportEntitySelect.value && btnGenerateReport) {
+                    btnGenerateReport.click();
+                }
+                
+                // تحديث لغة التقاويم طبقاً للغة المختارة
+                initFlatpickr();
+            }
+            langToggleBtn.addEventListener('click', () => {
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                applyLanguage(currentLang === 'ar' ? 'en' : 'ar');
+                
+                const activeTabBtn = document.querySelector('.tab-btn.bg-blue-600');
+                if (activeTabBtn) {
+                    const targetTab = activeTabBtn.getAttribute('data-tab');
+                    const updatedLang = localStorage.getItem('lang');
+                    pageTitle.innerText = translations[updatedLang][`title-${targetTab}`] || translations[updatedLang][`nav-${targetTab}`];
+                }
+            });
+
+            // 3. التنقل بين الـ Tabs
+            tabButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetTab = btn.getAttribute('data-tab');
+                    const currentLang = localStorage.getItem('lang') || 'ar';
+
+                    tabButtons.forEach(b => {
+                        b.classList.remove('bg-blue-600', 'text-white');
+                        b.classList.add('text-slate-400', 'hover:bg-slate-800');
+                    });
+
+                    btn.classList.add('bg-blue-600', 'text-white');
+                    btn.classList.remove('text-slate-400', 'hover:bg-slate-800');
+
+                    tabContents.forEach(content => {
+                        content.classList.remove('active');
+                        if (content.id === `tab-${targetTab}`) content.classList.add('active');
+                    });
+
+                    pageTitle.innerText = translations[currentLang][`title-${targetTab}`] || translations[currentLang][`nav-${targetTab}`];
+                });
+            });
+
+            // 4. قراءة الملاك لايف
+            function updateOwnersDropdown(ownersList) {
+                if(!carOwnerSelect) return;
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                carOwnerSelect.innerHTML = `<option value="">${translations[currentLang]['opt-select-prompt']}</option>`;
+                ownersList.forEach(owner => {
+                    const opt = document.createElement('option');
+                    opt.value = owner.id;
+                    opt.textContent = owner.name;
+                    carOwnerSelect.appendChild(opt);
+                });
+            }
+
+            onSnapshot(collection(db, "Owners"), (snapshot) => {
+                allOwners = [];
+                if(snapshot.empty) {
+                    if (ownersTableBody) ownersTableBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">لا يوجد ملاك مسجلين حالياً.</td></tr>`;
+                    document.getElementById('stat-owners-count').innerText = 0;
+                    updateOwnersDropdown([]);
+                    return;
+                }
+                snapshot.forEach((doc) => { allOwners.push({ id: doc.id, ...doc.data() }); });
+                document.getElementById('stat-owners-count').innerText = allOwners.length;
+                renderOwnersTable(allOwners);
+                updateOwnersDropdown(allOwners);
+                renderCarsTable(allCars);
+                updateContractsDropdowns();
+                updateExpensesDropdowns();
+                updateReportsDropdown();
+            });
+
+            function renderOwnersTable(data) {
+                if(!ownersTableBody) return;
+                ownersTableBody.innerHTML = '';
+                data.forEach(owner => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50/50 dark:hover:bg-slate-950/30 transition-colors";
+                    tr.innerHTML = `
+                        <td class="p-4 font-semibold text-slate-800 dark:text-white">${owner.name}</td>
+                        <td class="p-4 text-slate-500">${owner.phone}</td>
+                        <td class="p-4 font-mono text-xs tracking-wider">${owner.nationalId}</td>
+                        <td class="p-4 text-slate-400">${owner.address || '-'}</td>
+                        <td class="p-4 text-center space-x-2 space-x-reverse">
+                            <button class="btn-edit text-blue-500 hover:text-blue-700 p-1" data-id="${owner.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="btn-delete text-rose-500 hover:text-rose-700 p-1" data-id="${owner.id}"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    `;
+                    ownersTableBody.appendChild(tr);
+                });
+                document.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', () => handleEditOwner(b.dataset.id)));
+                document.querySelectorAll('.btn-delete').forEach(b => b.addEventListener('click', () => handleDeleteOwner(b.dataset.id)));
+            }
+
+            if(ownerForm) {
+                ownerForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const ownerId = document.getElementById('owner-id').value;
+                    const ownerData = {
+                        name: document.getElementById('owner-name').value,
+                        phone: document.getElementById('owner-phone').value,
+                        nationalId: document.getElementById('owner-national-id').value,
+                        address: document.getElementById('owner-address').value,
+                        notes: document.getElementById('owner-notes').value,
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    try {
+                        if(ownerId) {
+                            await updateDoc(doc(db, "Owners", ownerId), ownerData);
+                            alert("تم تحديث بيانات المالك بنجاح");
+                        } else {
+                            ownerData.createdAt = new Date().toISOString();
+                            await addDoc(collection(db, "Owners"), ownerData);
+                            alert("تم إضافة المالك بنجاح");
+                        }
+                        resetOwnerForm();
+                    } catch (error) {
+                        alert("حدث خطأ أثناء الحفظ!");
+                    }
+                });
+            }
+
+            function handleEditOwner(id) {
+                const owner = allOwners.find(o => o.id === id);
+                if(!owner) return;
+                document.getElementById('owner-id').value = owner.id;
+                document.getElementById('owner-name').value = owner.name;
+                document.getElementById('owner-phone').value = owner.phone;
+                document.getElementById('owner-national-id').value = owner.nationalId;
+                document.getElementById('owner-address').value = owner.address;
+                document.getElementById('owner-notes').value = owner.notes || '';
+                
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                if (currentLang === 'en') {
+                    document.getElementById('owner-form-title').innerText = "Edit Owner Details";
+                    document.getElementById('btn-save-owner').innerText = "Update Details";
+                } else {
+                    document.getElementById('owner-form-title').innerText = "تعديل بيانات المالك";
+                    document.getElementById('btn-save-owner').innerText = "تحديث البيانات";
+                }
+                document.getElementById('btn-cancel-edit').classList.remove('hidden');
+            }
+
+            async function handleDeleteOwner(id) {
+                if(confirm("هل أنت متأكد من حذف هذا المالك نهائياً؟")) {
+                    try { await deleteDoc(doc(db, "Owners", id)); alert("تم حذف المالك بنجاح"); } catch (error) { console.error(error); }
+                }
+            }
+
+            if(searchOwnersInput) {
+                searchOwnersInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase().trim();
+                    const filtered = allOwners.filter(o => o.name.toLowerCase().includes(query) || o.phone.includes(query) || o.nationalId.includes(query));
+                    renderOwnersTable(filtered);
+                });
+            }
+
+            const cancelEditBtn = document.getElementById('btn-cancel-edit');
+            if(cancelEditBtn) cancelEditBtn.addEventListener('click', resetOwnerForm);
+            
+            function resetOwnerForm() {
+                if(ownerForm) ownerForm.reset();
+                document.getElementById('owner-id').value = '';
+                document.getElementById('owner-form-title').innerText = "إضافة مالك جديد";
+                document.getElementById('btn-save-owner').innerText = "حفظ البيانات";
+                if(cancelEditBtn) cancelEditBtn.classList.add('hidden');
+            }
+
+
+            // ==========================================
+            // [ج] كود الفايربيز وإدارة السيارات المحدثة (Cars)
+            // ==========================================
+            onSnapshot(collection(db, "cars"), (snapshot) => {
+                allCars = [];
+                if(snapshot.empty) {
+                    if (carsTableBody) carsTableBody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-slate-400">لا يوجد سيارات مسجلة حالياً.</td></tr>`;
+                    document.getElementById('stat-cars-count').innerText = 0;
+                    return;
+                }
+                snapshot.forEach((doc) => { allCars.push({ id: doc.id, ...doc.data() }); });
+                document.getElementById('stat-cars-count').innerText = allCars.length;
+                renderCarsTable(allCars);
+                updateContractsDropdowns();
+            });
+
+            function renderCarsTable(data) {
+                if(!carsTableBody) return;
+                carsTableBody.innerHTML = '';
+                data.forEach(car => {
+                    const ownerObj = allOwners.find(o => o.id === car.ownerId);
+                    const ownerName = ownerObj ? ownerObj.name : "مالك غير معروف";
+
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50/50 dark:hover:bg-slate-950/30 transition-colors";
+                    tr.innerHTML = `
+                        <td class="p-4 text-slate-600 dark:text-slate-300"><i class="fa-solid fa-user-shield text-xs ml-1 text-slate-400"></i>${ownerName}</td>
+                        <td class="p-4 font-semibold text-slate-800 dark:text-white">${car.brand}</td>
+                        <td class="p-4 text-slate-500">${car.model}</td>
+                        <td class="p-4 text-slate-400">${car.year}</td>
+                        <td class="p-4 font-mono font-semibold text-blue-500">${car.plate}</td>
+                        <td class="p-4 text-center space-x-2 space-x-reverse">
+                            <button class="btn-car-edit text-blue-500 hover:text-blue-700 p-1" data-id="${car.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="btn-car-delete text-rose-500 hover:text-rose-700 p-1" data-id="${car.id}"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    `;
+                    carsTableBody.appendChild(tr);
+                });
+                document.querySelectorAll('.btn-car-edit').forEach(b => b.addEventListener('click', () => handleEditCar(b.dataset.id)));
+                document.querySelectorAll('.btn-car-delete').forEach(b => b.addEventListener('click', () => handleDeleteCar(b.dataset.id)));
+            }
+
+            if(carForm) {
+                carForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const carId = document.getElementById('car-id').value;
+                    const carData = {
+                        ownerId: document.getElementById('car-owner-select').value,
+                        brand: document.getElementById('car-brand').value,
+                        model: document.getElementById('car-model').value,
+                        year: parseInt(document.getElementById('car-year').value),
+                        plate: document.getElementById('car-plate').value,
+                        status: "Available",
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    try {
+                        if(carId) {
+                            await updateDoc(doc(db, "cars", carId), carData);
+                            alert("تم تحديث بيانات السيارة بنجاح");
+                        } else {
+                            carData.createdAt = new Date().toISOString();
+                            await addDoc(collection(db, "cars"), carData);
+                            alert("تم إضافة السيارة لأسطولك بنجاح");
+                        }
+                        resetCarForm();
+                    } catch (error) {
+                        alert("حدث خطأ أثناء حفظ السيارة!");
+                    }
+                });
+            }
+
+            function handleEditCar(id) {
+                const car = allCars.find(c => c.id === id);
+                if(!car) return;
+                document.getElementById('car-id').value = car.id;
+                document.getElementById('car-owner-select').value = car.ownerId;
+                document.getElementById('car-brand').value = car.brand;
+                document.getElementById('car-model').value = car.model;
+                document.getElementById('car-year').value = car.year;
+                document.getElementById('car-plate').value = car.plate;
+
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                if (currentLang === 'en') {
+                    document.getElementById('car-form-title').innerText = "Edit Car Details";
+                    document.getElementById('btn-save-car').innerText = "Update Car";
+                } else {
+                    document.getElementById('car-form-title').innerText = "تعديل بيانات السيارة";
+                    document.getElementById('btn-save-car').innerText = "تحديث السيارة";
+                }
+                document.getElementById('btn-cancel-car-edit').classList.remove('hidden');
+            }
+
+            async function handleDeleteCar(id) {
+                if(confirm("هل أنت متأكد من حذف هذه السيارة من الأسطول؟")) {
+                    try { await deleteDoc(doc(db, "cars", id)); alert("تم حذف السيارة بنجاح"); } catch (error) { console.error(error); }
+                }
+            }
+
+            if(searchCarsInput) {
+                searchCarsInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase().trim();
+                    const filtered = allCars.filter(c => {
+                        const ownerObj = allOwners.find(o => o.id === c.ownerId);
+                        const ownerName = ownerObj ? ownerObj.name.toLowerCase() : "";
+                        return c.brand.toLowerCase().includes(query) || 
+                               c.model.toLowerCase().includes(query) || 
+                               c.plate.toLowerCase().includes(query) ||
+                               ownerName.includes(query);
+                    });
+                    renderCarsTable(filtered);
+                });
+            }
+
+            const cancelCarEditBtn = document.getElementById('btn-cancel-car-edit');
+            if(cancelCarEditBtn) cancelCarEditBtn.addEventListener('click', resetCarForm);
+            
+            function resetCarForm() {
+                if(carForm) carForm.reset();
+                document.getElementById('car-id').value = '';
+                document.getElementById('car-form-title').innerText = "إضافة سيارة جديدة";
+                document.getElementById('btn-save-car').innerText = "حفظ السيارة";
+                if(cancelCarEditBtn) cancelCarEditBtn.classList.add('hidden');
+            }
+
+
+            // ==========================================
+            // [د] كود الفايربيز وإدارة العملاء (Customers)
+            // ==========================================
+            onSnapshot(collection(db, "Customers"), (snapshot) => {
+                allCustomers = [];
+                if(snapshot.empty) {
+                    if (customersTableBody) customersTableBody.innerHTML = `<tr><td colspan="4" class="p-8 text-center text-slate-400">لا يوجد عملاء مسجلين حالياً.</td></tr>`;
+                    document.getElementById('stat-customers-count').innerText = 0;
+                    return;
+                }
+                snapshot.forEach((doc) => { allCustomers.push({ id: doc.id, ...doc.data() }); });
+                document.getElementById('stat-customers-count').innerText = allCustomers.length;
+                renderCustomersTable(allCustomers);
+                updateContractsDropdowns();
+                updateExpensesDropdowns();
+                updateReportsDropdown();
+            });
+
+            function renderCustomersTable(data) {
+                if(!customersTableBody) return;
+                customersTableBody.innerHTML = '';
+                data.forEach(cust => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50/50 dark:hover:bg-slate-950/30 transition-colors";
+                    tr.innerHTML = `
+                        <td class="p-4 font-semibold text-slate-800 dark:text-white">${cust.name}</td>
+                        <td class="p-4 text-slate-500">${cust.phone}</td>
+                        <td class="p-4 font-mono text-xs tracking-wider">${cust.nationalId}</td>
+                        <td class="p-4 text-center space-x-2 space-x-reverse">
+                            <button class="btn-cust-edit text-blue-500 hover:text-blue-700 p-1" data-id="${cust.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="btn-cust-delete text-rose-500 hover:text-rose-700 p-1" data-id="${cust.id}"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    `;
+                    customersTableBody.appendChild(tr);
+                });
+                document.querySelectorAll('.btn-cust-edit').forEach(b => b.addEventListener('click', () => handleEditCustomer(b.dataset.id)));
+                document.querySelectorAll('.btn-cust-delete').forEach(b => b.addEventListener('click', () => handleDeleteCustomer(b.dataset.id)));
+            }
+
+            if(customerForm) {
+                customerForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const custId = document.getElementById('customer-id').value;
+                    const custData = {
+                        name: document.getElementById('customer-name').value,
+                        phone: document.getElementById('customer-phone').value,
+                        nationalId: document.getElementById('customer-national-id').value,
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    try {
+                        if(custId) {
+                            await updateDoc(doc(db, "Customers", custId), custData);
+                            alert("تم تحديث بيانات العميل بنجاح");
+                        } else {
+                            custData.createdAt = new Date().toISOString();
+                            await addDoc(collection(db, "Customers"), custData);
+                            alert("تم إضافة العميل بنجاح");
+                        }
+                        resetCustomerForm();
+                    } catch (error) {
+                        alert("حدث خطأ أثناء حفظ العميل!");
+                    }
+                });
+            }
+
+            function handleEditCustomer(id) {
+                const cust = allCustomers.find(c => c.id === id);
+                if(!cust) return;
+                document.getElementById('customer-id').value = cust.id;
+                document.getElementById('customer-name').value = cust.name;
+                document.getElementById('customer-phone').value = cust.phone;
+                document.getElementById('customer-national-id').value = cust.nationalId;
+
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                if (currentLang === 'en') {
+                    document.getElementById('customer-form-title').innerText = "Edit Customer Details";
+                    document.getElementById('btn-save-customer').innerText = "Update Customer";
+                } else {
+                    document.getElementById('customer-form-title').innerText = "تعديل بيانات العميل";
+                    document.getElementById('btn-save-customer').innerText = "تحديث العميل";
+                }
+                document.getElementById('btn-cancel-customer-edit').classList.remove('hidden');
+            }
+
+            async function handleDeleteCustomer(id) {
+                if(confirm("هل أنت متأكد من حذف هذا العميل نهائياً؟")) {
+                    try { await deleteDoc(doc(db, "Customers", id)); alert("تم حذف العميل بنجاح"); } catch (error) { console.error(error); }
+                }
+            }
+
+            if(searchCustomersInput) {
+                searchCustomersInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase().trim();
+                    const filtered = allCustomers.filter(c => 
+                        c.name.toLowerCase().includes(query) || 
+                        c.phone.includes(query) || 
+                        c.nationalId.includes(query)
+                    );
+                    renderCustomersTable(filtered);
+                });
+            }
+
+            const cancelCustEditBtn = document.getElementById('btn-cancel-customer-edit');
+            if(cancelCustEditBtn) cancelCustEditBtn.addEventListener('click', resetCustomerForm);
+            
+            function resetCustomerForm() {
+                if(customerForm) customerForm.reset();
+                document.getElementById('customer-id').value = '';
+                document.getElementById('customer-form-title').innerText = "إضافة عميل جديد";
+                document.getElementById('btn-save-customer').innerText = "حفظ العميل";
+                if(cancelCustEditBtn) cancelCustEditBtn.classList.add('hidden');
+            }
+
+
+            // ==========================================
+            // [هـ] نظام إدارة العقود الذكية والعدادات (Contracts)
+            // ==========================================
+            let totalPendingRevenues = 0;
+
+            function generateSerialAndSet() {
+                const now = new Date();
+                const serial = "CTX-" + now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + "-" + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0');
+                const serialInput = document.getElementById('contract-serial');
+                if(serialInput && !document.getElementById('contract-id').value) {
+                    serialInput.value = serial;
+                }
+            }
+
+            function updateContractsDropdowns() {
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                if(contractCustomerSelect) {
+                    contractCustomerSelect.innerHTML = `<option value="">${translations[currentLang]['opt-cust-prompt']}</option>`;
+                    allCustomers.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = c.name;
+                        contractCustomerSelect.appendChild(opt);
+                    });
+                }
+                if(contractCarSelect) {
+                    contractCarSelect.innerHTML = `<option value="">${translations[currentLang]['opt-car-prompt']}</option>`;
+                    allCars.forEach(car => {
+                        const opt = document.createElement('option');
+                        opt.value = car.id;
+                        opt.textContent = `${car.brand} ${car.model} (${car.plate})`;
+                        contractCarSelect.appendChild(opt);
+                    });
+                }
+            }
+
+            if(contractDurationType) {
+                contractDurationType.addEventListener('change', () => {
+                    if(contractDurationType.value === 'open') {
+                        document.getElementById('div-contract-days').classList.add('hidden');
+                    } else {
+                        document.getElementById('div-contract-days').classList.remove('hidden');
+                    }
+                    calculateContractFinancials();
+                });
+            }
+
+            if(contractCounterType) {
+                contractCounterType.addEventListener('change', () => {
+                    if(contractCounterType.value === 'open') {
+                        document.getElementById('div-counter-locked-details').classList.add('hidden');
+                    } else {
+                        document.getElementById('div-counter-locked-details').classList.remove('hidden');
+                    }
+                });
+            }
+
+            function calculateContractFinancials() {
+                const type = contractDurationType.value;
+                const days = type === 'open' ? 1 : parseInt(contractDaysCount.value) || 1;
+                const dayPrice = parseFloat(contractDayPriceInput.value) || 0;
+                const paid = parseFloat(contractAmountPaidInput.value) || 0;
+
+                const totalCost = days * dayPrice;
+                const rest = totalCost - paid;
+                contractAmountRestInput.value = rest >= 0 ? rest.toFixed(2) : "0.00";
+            }
+
+            [contractDaysCount, contractDayPriceInput, contractAmountPaidInput].forEach(inp => {
+                if(inp) inp.addEventListener('input', calculateContractFinancials);
+            });
+
+            onSnapshot(collection(db, "Contracts"), (snapshot) => {
+                allContracts = [];
+                totalPendingRevenues = 0;
+                if(snapshot.empty) {
+                    if (contractsTableBody) contractsTableBody.innerHTML = `<tr><td colspan="7" class="p-8 text-slate-400 text-center">لا يوجد عقود مسجلة حالياً.</td></tr>`;
+                    document.getElementById('stat-contracts-count').innerText = 0;
+                    updateFinanceDashboard();
+                    return;
+                }
+                snapshot.forEach((doc) => { 
+                    const data = doc.data();
+                    allContracts.push({ id: doc.id, ...data });
+                    const profitRatio = (data.officeProfitRate || 10) / 100;
+                    totalPendingRevenues += (data.amountPaid * profitRatio);
+                });
+                document.getElementById('stat-contracts-count').innerText = allContracts.length;
+                renderContractsTable(allContracts);
+                updateFinanceDashboard();
+                updatePaymentsDropdowns();
+            });
+
+            function renderContractsTable(data) {
+                if(!contractsTableBody) return;
+                contractsTableBody.innerHTML = '';
+                const currentLang = localStorage.getItem('lang') || 'ar';
+
+                data.forEach(cont => {
+                    const custObj = allCustomers.find(c => c.id === cont.customerId);
+                    const carObj = allCars.find(c => c.id === cont.carId);
+                    
+                    const custName = custObj ? custObj.name : "عميل غير معروف";
+                    const carName = carObj ? `${carObj.brand} ${carObj.model}` : "سيارة غير معروفة";
+
+                    const durationText = cont.durationType === 'open' ? (currentLang === 'en' ? 'Open Duration' : 'مدة مفتوحة') : `${cont.daysCount} ${currentLang === 'en' ? 'Days' : 'أيام'}`;
+                    const counterText = cont.counterType === 'open' ? (currentLang === 'en' ? 'Open Counter' : 'عداد مفتوح') : (currentLang === 'en' ? 'Locked Counter' : 'عداد مقفول');
+
+                    let statusBadge = '';
+                    let actionButtons = '';
+
+                    if(cont.status === 'Pending') {
+                        statusBadge = `<span class="px-2.5 py-1 text-xs rounded-full bg-amber-500/10 text-amber-500 font-semibold border border-amber-500/20"><i class="fa-solid fa-clock-rotate-left mr-1"></i>${currentLang === 'en' ? 'Pending' : 'معلق'}</span>`;
+                        actionButtons = `
+                            <button class="btn-cont-close text-emerald-500 hover:text-emerald-700 text-xs font-bold border border-emerald-500/20 px-2 py-1 rounded-lg bg-emerald-500/5 transition-all" data-id="${cont.id}"><i class="fa-solid fa-flag-checkered ml-1"></i>${currentLang === 'en' ? 'Close' : 'إنهاء العقد'}</button>
+                            <button class="btn-cont-edit text-blue-500 hover:text-blue-700 p-1" data-id="${cont.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="btn-cont-delete text-rose-500 hover:text-rose-700 p-1" data-id="${cont.id}"><i class="fa-solid fa-trash"></i></button>
+                        `;
+                    } else {
+                        statusBadge = `<span class="px-2.5 py-1 text-xs rounded-full bg-emerald-500/10 text-emerald-500 font-semibold border border-emerald-500/20"><i class="fa-solid fa-circle-check mr-1"></i>${currentLang === 'en' ? 'Closed' : 'منتهي'}</span>`;
+                        actionButtons = `<button class="btn-cont-delete text-rose-500 hover:text-rose-700 p-1" data-id="${cont.id}"><i class="fa-solid fa-trash"></i></button>`;
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50/50 dark:hover:bg-slate-950/30 transition-colors";
+                    tr.innerHTML = `
+                        <td class="p-4 font-mono font-bold text-xs text-slate-500">${cont.serial}</td>
+                        <td class="p-4 font-semibold text-slate-800 dark:text-white">${custName}</td>
+                        <td class="p-4 text-blue-500 font-medium">${carName}</td>
+                        <td class="p-4">
+                            <div class="font-medium text-slate-700 dark:text-slate-300">${durationText}</div>
+                            <div class="text-xs text-slate-400">${counterText} (بدء: ${cont.kmStart} كم)</div>
+                        </td>
+                        <td class="p-4">
+                            <div class="text-xs text-slate-400">${currentLang === 'en' ? 'Paid:' : 'مدفوع:'} <span class="text-emerald-500 font-bold">${cont.amountPaid}</span></div>
+                            <div class="text-xs text-slate-400">${currentLang === 'en' ? 'Rest:' : 'باقي:'} <span class="text-rose-500 font-bold">${cont.amountRest}</span></div>
+                        </td>
+                        <td class="p-4">${statusBadge}</td>
+                        <td class="p-4 text-center space-x-2 space-x-reverse">${actionButtons}</td>
+                    `;
+                    contractsTableBody.appendChild(tr);
+                });
+
+                document.querySelectorAll('.btn-cont-edit').forEach(b => b.addEventListener('click', () => handleEditContract(b.dataset.id)));
+                document.querySelectorAll('.btn-cont-delete').forEach(b => b.addEventListener('click', () => handleDeleteContract(b.dataset.id)));
+                document.querySelectorAll('.btn-cont-close').forEach(b => b.addEventListener('click', () => handleCloseContract(b.dataset.id)));
+            }
+
+            if(contractForm) {
+                contractForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const contractId = document.getElementById('contract-id').value;
+                    
+                    const contractData = {
+                        serial: document.getElementById('contract-serial').value,
+                        customerId: contractCustomerSelect.value,
+                        carId: contractCarSelect.value,
+                        durationType: contractDurationType.value,
+                        daysCount: contractDurationType.value === 'open' ? 0 : parseInt(contractDaysCount.value),
+                        dayPrice: parseFloat(contractDayPriceInput.value),
+                        officeProfitRate: parseFloat(document.getElementById('contract-office-profit-rate').value),
+                        counterType: contractCounterType.value,
+                        kmStart: parseInt(document.getElementById('contract-km-start').value),
+                        kmAllowed: contractCounterType.value === 'open' ? 0 : parseInt(document.getElementById('contract-km-allowed').value),
+                        kmExtraPrice: contractCounterType.value === 'open' ? 0 : parseFloat(document.getElementById('contract-km-extra-price').value),
+                        amountPaid: parseFloat(contractAmountPaidInput.value),
+                        amountRest: parseFloat(contractAmountRestInput.value),
+                        status: "Pending",
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    try {
+                        if(contractId) {
+                            delete contractData.status;
+                            await updateDoc(doc(db, "Contracts", contractId), contractData);
+                            alert("تم تحديث العقد بنجاح");
+                        } else {
+                            contractData.createdAt = new Date().toISOString();
+                            const docRef = await addDoc(collection(db, "Contracts"), contractData);
+                            
+                            if(contractData.amountPaid > 0) {
+                                await addDoc(collection(db, "Payments"), {
+                                    contractId: docRef.id,
+                                    serial: contractData.serial,
+                                    customerId: contractData.customerId,
+                                    amount: contractData.amountPaid,
+                                    date: new Date().toISOString().split('T')[0],
+                                    createdAt: new Date().toISOString()
+                                });
+                            }
+                            alert("تم إصدار العقد وتدوين الدفعة المالية بنجاح");
+                        }
+                        resetContractForm();
+                    } catch (error) {
+                        alert("حدث خطأ أثناء حفظ العقد!");
+                    }
+                });
+            }
+
+            function handleEditContract(id) {
+                const cont = allContracts.find(c => c.id === id);
+                if(!cont) return;
+                document.getElementById('contract-id').value = cont.id;
+                document.getElementById('contract-serial').value = cont.serial;
+                contractCustomerSelect.value = cont.customerId;
+                contractCarSelect.value = cont.carId;
+                contractDurationType.value = cont.durationType;
+                contractDaysCount.value = cont.daysCount;
+                contractDayPriceInput.value = cont.dayPrice;
+                document.getElementById('contract-office-profit-rate').value = cont.officeProfitRate;
+                contractCounterType.value = cont.counterType;
+                document.getElementById('contract-km-start').value = cont.kmStart;
+                document.getElementById('contract-km-allowed').value = cont.kmAllowed;
+                document.getElementById('contract-km-extra-price').value = cont.kmExtraPrice;
+                contractAmountPaidInput.value = cont.amountPaid;
+                contractAmountRestInput.value = cont.amountRest;
+
+                contractDurationType.dispatchEvent(new Event('change'));
+                contractCounterType.dispatchEvent(new Event('change'));
+
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                if (currentLang === 'en') {
+                    document.getElementById('contract-form-title').innerText = "Edit Contract Details";
+                    document.getElementById('btn-save-contract').innerText = "Update Contract";
+                } else {
+                    document.getElementById('contract-form-title').innerText = "تعديل بيانات العقد";
+                    document.getElementById('btn-save-contract').innerText = "تحديث العقد";
+                }
+                document.getElementById('btn-cancel-contract-edit').classList.remove('hidden');
+            }
+
+            async function handleCloseContract(id) {
+                const cont = allContracts.find(c => c.id === id);
+                if(!cont) return;
+
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                const promptMsg = currentLang === 'en' ? 
+                    `Enter Final KM Counter for Contract ${cont.serial}:` : 
+                    `أدخل قراءة الكيلومتر النهائي لإغلاق العقد ${cont.serial}:`;
+
+                const finalKmStr = prompt(promptMsg, cont.kmStart);
+                if (finalKmStr === null) return; 
+
+                const finalKm = parseInt(finalKmStr);
+                if (isNaN(finalKm) || finalKm < cont.kmStart) {
+                    alert(currentLang === 'en' ? "Invalid KM Value!" : "قيمة الكيلومتر النهائي غير صحيحة أو أقل من قيمة البدء!");
+                    return;
+                }
+
+                let extraCost = 0;
+                if(cont.counterType === 'locked') {
+                    const drivenKm = finalKm - cont.kmStart;
+                    const allowedKmTotal = cont.kmAllowed * (cont.daysCount || 1);
+                    if(drivenKm > allowedKmTotal) {
+                        extraCost = (drivenKm - allowedKmTotal) * cont.kmExtraPrice;
+                    }
+                }
+
+                const newRest = cont.amountRest + extraCost;
+                
+                if(extraCost > 0) {
+                    alert(currentLang === 'en' ? 
+                        `Contract closed! Extra KM cost added: ${extraCost} EGP. Total remaining rest: ${newRest} EGP.` : 
+                        `تم حساب قراءة العداد! تم إضافة تكلفة كم زائد: ${extraCost} ج.م. إجمالي الباقي المطلوب: ${newRest} ج.م.`);
+                } else {
+                    alert(currentLang === 'en' ? "Contract closed successfully with no extra KM charges." : "تم إنهاء وإغلاق العقد بنجاح وبدون أي تكاليف كيلومترات زائدة.");
+                }
+
+                try {
+                    await updateDoc(doc(db, "Contracts", id), {
+                        kmEnd: finalKm,
+                        amountRest: newRest,
+                        status: "Closed",
+                        closedAt: new Date().toISOString()
+                    });
+                } catch (error) {
+                    console.error(error);
+                }
+            }
+
+            async function handleDeleteContract(id) {
+                if(confirm("هل أنت متأكد من حذف هذا العقد نهائياً؟")) {
+                    try { await deleteDoc(doc(db, "Contracts", id)); alert("تم حذف العقد بنجاح"); } catch (error) { console.error(error); }
+                }
+            }
+
+
+            // ==========================================
+            // [و] كود الفايربيز وإدارة المصروفات (Expenses)
+            // ==========================================
+            let totalCompanyExpenses = 0;
+
+            function updateExpensesDropdowns() {
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                if(expenseOwnerSelect) {
+                    expenseOwnerSelect.innerHTML = `<option value="">${translations[currentLang]['opt-select-owner-prompt']}</option>`;
+                    allOwners.forEach(o => {
+                        const opt = document.createElement('option');
+                        opt.value = o.id;
+                        opt.textContent = o.name;
+                        expenseOwnerSelect.appendChild(opt);
+                    });
+                }
+                if(expenseCustomerSelect) {
+                    expenseCustomerSelect.innerHTML = `<option value="">${translations[currentLang]['opt-select-cust-prompt']}</option>`;
+                    allCustomers.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = c.name;
+                        expenseCustomerSelect.appendChild(opt);
+                    });
+                }
+            }
+
+            if(expensePayerSelect) {
+                expensePayerSelect.addEventListener('change', () => {
+                    const val = expensePayerSelect.value;
+                    document.getElementById('div-expense-owner-select').classList.add('hidden');
+                    document.getElementById('div-expense-customer-select').classList.add('hidden');
+
+                    if(val === 'owner') {
+                        document.getElementById('div-expense-owner-select').classList.remove('hidden');
+                    } else if(val === 'customer') {
+                        document.getElementById('div-expense-customer-select').classList.remove('hidden');
+                    }
+                });
+            }
+
+            onSnapshot(collection(db, "Expenses"), (snapshot) => {
+                allExpenses = [];
+                totalCompanyExpenses = 0;
+                if(snapshot.empty) {
+                    if (expensesTableBody) expensesTableBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">لا يوجد مصروفات مسجلة حالياً.</td></tr>`;
+                    document.getElementById('stat-expenses-total').innerText = "0.00 EGP";
+                    updateFinanceDashboard();
+                    return;
+                }
+                snapshot.forEach((doc) => { 
+                    const data = doc.data();
+                    allExpenses.push({ id: doc.id, ...data });
+                    if(data.payer === 'company') {
+                        totalCompanyExpenses += parseFloat(data.amount || 0);
+                    }
+                });
+                renderExpensesTable(allExpenses);
+                updateFinanceDashboard();
+            });
+
+            function renderExpensesTable(data) {
+                if(!expensesTableBody) return;
+                expensesTableBody.innerHTML = '';
+                const currentLang = localStorage.getItem('lang') || 'ar';
+
+                data.forEach(exp => {
+                    let payerText = '';
+                    if(exp.payer === 'owner') {
+                        const targetOwner = allOwners.find(o => o.id === exp.targetId);
+                        const ownerName = targetOwner ? ` (${targetOwner.name})` : '';
+                        payerText = (currentLang === 'en' ? 'Car Owner' : 'صاحب العربية') + ownerName;
+                    } else if(exp.payer === 'customer') {
+                        const targetCust = allCustomers.find(c => c.id === exp.targetId);
+                        const custName = targetCust ? ` (${targetCust.name})` : '';
+                        payerText = (currentLang === 'en' ? 'Customer' : 'العميل') + custName;
+                    } else {
+                        payerText = currentLang === 'en' ? 'Company Office' : 'الشركة نفسها';
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50/50 dark:hover:bg-slate-950/30 transition-colors";
+                    tr.innerHTML = `
+                        <td class="p-4 font-semibold text-slate-800 dark:text-white">${exp.title}</td>
+                        <td class="p-4 text-slate-500 font-medium"><i class="fa-solid fa-money-check-dollar text-xs ml-1 text-slate-400"></i>${payerText}</td>
+                        <td class="p-4 font-bold text-rose-500">${parseFloat(exp.amount).toFixed(2)} EGP</td>
+                        <td class="p-4 text-slate-400 font-mono text-xs">${exp.date}</td>
+                        <td class="p-4 text-center space-x-2 space-x-reverse">
+                            <button class="btn-exp-edit text-blue-500 hover:text-blue-700 p-1" data-id="${exp.id}"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button class="btn-exp-delete text-rose-500 hover:text-rose-700 p-1" data-id="${exp.id}"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    `;
+                    expensesTableBody.appendChild(tr);
+                });
+
+                document.querySelectorAll('.btn-exp-edit').forEach(b => b.addEventListener('click', () => handleEditExpense(b.dataset.id)));
+                document.querySelectorAll('.btn-exp-delete').forEach(b => b.addEventListener('click', () => handleDeleteExpense(b.dataset.id)));
+            }
+
+            if(expenseForm) {
+                expenseForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const expenseId = document.getElementById('expense-id').value;
+                    const pType = expensePayerSelect.value;
+                    
+                    let targetId = '';
+                    if(pType === 'owner') targetId = expenseOwnerSelect.value;
+                    else if(pType === 'customer') targetId = expenseCustomerSelect.value;
+
+                    const expenseData = {
+                        title: document.getElementById('expense-title').value,
+                        payer: pType,
+                        targetId: targetId,
+                        amount: parseFloat(document.getElementById('expense-amount').value),
+                        date: document.getElementById('expense-date').value,
+                        notes: document.getElementById('expense-notes').value,
+                        updatedAt: new Date().toISOString()
+                    };
+
+                    try {
+                        if(expenseId) {
+                            await updateDoc(doc(db, "Expenses", expenseId), expenseData);
+                            alert("تم تحديث المصروف بنجاح");
+                        } else {
+                            expenseData.createdAt = new Date().toISOString();
+                            await addDoc(collection(db, "Expenses"), expenseData);
+                            alert("تم تسجيل وحفظ المصروف بنجاح");
+                        }
+                        resetExpenseForm();
+                    } catch (error) {
+                        alert("حدث خطأ أثناء حفظ المصروف!");
+                    }
+                });
+            }
+
+            function handleEditExpense(id) {
+                const exp = allExpenses.find(e => e.id === id);
+                if(!exp) return;
+                document.getElementById('expense-id').value = exp.id;
+                document.getElementById('expense-title').value = exp.title;
+                expensePayerSelect.value = exp.payer;
+                expensePayerSelect.dispatchEvent(new Event('change'));
+
+                if(exp.payer === 'owner') expenseOwnerSelect.value = exp.targetId;
+                else if(exp.payer === 'customer') expenseCustomerSelect.value = exp.targetId;
+
+                document.getElementById('expense-amount').value = exp.amount;
+                document.getElementById('expense-date').value = exp.date;
+                document.getElementById('expense-notes').value = exp.notes || '';
+
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                if (currentLang === 'en') {
+                    document.getElementById('expense-form-title').innerText = "Edit Expense Details";
+                    document.getElementById('btn-save-expense').innerText = "Update Expense";
+                } else {
+                    document.getElementById('expense-form-title').innerText = "تعديل بيانات المصروف";
+                    document.getElementById('btn-save-expense').innerText = "تحديث المصروف";
+                }
+                document.getElementById('btn-cancel-expense-edit').classList.remove('hidden');
+            }
+
+            async function handleDeleteExpense(id) {
+                if(confirm("هل أنت متأكد من حذف هذا المصروف؟")) {
+                    try { await deleteDoc(doc(db, "Expenses", id)); alert("تم حذف المصروف بنجاح"); } catch (error) { console.error(error); }
+                }
+            }
+
+            if(searchExpensesInput) {
+                searchExpensesInput.addEventListener('input', (e) => {
+                    const query = e.target.value.toLowerCase().trim();
+                    const filtered = allExpenses.filter(exp => exp.title.toLowerCase().includes(query) || exp.payer.includes(query));
+                    renderExpensesTable(filtered);
+                });
+            }
+
+            const cancelExpenseBtn = document.getElementById('btn-cancel-expense-edit');
+            if(cancelExpenseBtn) cancelExpenseBtn.addEventListener('click', resetExpenseForm);
+
+            function resetExpenseForm() {
+                if(expenseForm) expenseForm.reset();
+                document.getElementById('expense-id').value = '';
+                expensePayerSelect.dispatchEvent(new Event('change'));
+                document.getElementById('expense-form-title').innerText = "تسجيل مصروف جديد";
+                document.getElementById('btn-save-expense').innerText = "حفظ المصروف";
+                if(cancelExpenseBtn) cancelExpenseBtn.classList.add('hidden');
+            }
+
+
+            // ==========================================
+            // [ز] سجل التحصيلات النقدية والخزنة والمدفوعات (Payments)
+            // ==========================================
+            let totalOfficeRevenues = 0;
+
+            function updatePaymentsDropdowns() {
+                if(!paymentContractSelect) return;
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                paymentContractSelect.innerHTML = `<option value="">${translations[currentLang]['opt-contract-prompt']}</option>`;
+                allContracts.forEach(cont => {
+                    const cust = allCustomers.find(c => c.id === cont.customerId);
+                    const nameText = cust ? ` - ${cust.name}` : '';
+                    const opt = document.createElement('option');
+                    opt.value = cont.id;
+                    opt.textContent = `${cont.serial}${nameText} (باقي: ${cont.amountRest} ج.م)`;
+                    paymentContractSelect.appendChild(opt);
+                });
+            }
+
+            onSnapshot(collection(db, "Payments"), (snapshot) => {
+                allPayments = [];
+                totalOfficeRevenues = 0;
+                if(snapshot.empty) {
+                    if (paymentsTableBody) paymentsTableBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">لا يوجد حركات قبض حالياً في الخزنة.</td></tr>`;
+                    updateFinanceDashboard();
+                    return;
+                }
+                snapshot.forEach((doc) => { 
+                    const data = doc.data();
+                    allPayments.push({ id: doc.id, ...data });
+                    
+                    const boundContract = allContracts.find(c => c.id === data.contractId);
+                    const rate = boundContract ? (boundContract.officeProfitRate || 10) / 100 : 0.10;
+                    totalOfficeRevenues += (parseFloat(data.amount || 0) * rate);
+                });
+                renderPaymentsTable(allPayments);
+                updateFinanceDashboard();
+            });
+
+            function renderPaymentsTable(data) {
+                if(!paymentsTableBody) return;
+                paymentsTableBody.innerHTML = '';
+                data.forEach(pay => {
+                    const custObj = allCustomers.find(c => c.id === pay.customerId);
+                    const custName = custObj ? custObj.name : "مستأجر غير معروف";
+
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50/50 dark:hover:bg-slate-950/30 transition-colors";
+                    tr.innerHTML = `
+                        <td class="p-4 font-mono font-bold text-xs text-slate-400">${pay.serial}</td>
+                        <td class="p-4 font-semibold text-slate-800 dark:text-white">${custName}</td>
+                        <td class="p-4 font-bold text-emerald-500">+${parseFloat(pay.amount).toFixed(2)} EGP</td>
+                        <td class="p-4 text-slate-400 font-mono text-xs">${pay.date}</td>
+                        <td class="p-4 text-center">
+                            <button class="btn-pay-delete text-rose-500 hover:text-rose-700 p-1" data-id="${pay.id}"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    `;
+                    paymentsTableBody.appendChild(tr);
+                });
+                document.querySelectorAll('.btn-pay-delete').forEach(b => b.addEventListener('click', () => handleDeletePayment(b.dataset.id)));
+            }
+
+            if(paymentForm) {
+                paymentForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const contractId = paymentContractSelect.value;
+                    const amount = parseFloat(document.getElementById('payment-amount').value);
+                    const date = document.getElementById('payment-date').value;
+
+                    const boundContract = allContracts.find(c => c.id === contractId);
+                    if(!boundContract) return;
+
+                    if(amount > boundContract.amountRest) {
+                        alert(localStorage.getItem('lang') === 'en' ? "Amount exceeds remaining contract balance!" : "المبلغ المدخل أكبر من باقي الحساب المستحق على هذا العقد!");
+                        return;
+                    }
+
+                    const paymentData = {
+                        contractId: contractId,
+                        serial: boundContract.serial,
+                        customerId: boundContract.customerId,
+                        amount: amount,
+                        date: date,
+                        createdAt: new Date().toISOString()
+                    };
+
+                    try {
+                        await addDoc(collection(db, "Payments"), paymentData);
+                        const updatedPaid = boundContract.amountPaid + amount;
+                        const updatedRest = boundContract.amountRest - amount;
+                        await updateDoc(doc(db, "Contracts", contractId), {
+                            amountPaid: updatedPaid,
+                            amountRest: updatedRest
+                        });
+
+                        alert("تم تسجيل دفعة القبض وتحديث حساب العقد بنجاح");
+                        paymentForm.reset();
+                    } catch (error) {
+                        alert("حدث خطأ أثناء حفظ الدفعة ماليًا!");
+                    }
+                });
+            }
+
+            async function handleDeletePayment(id) {
+                if(confirm("هل أنت متأكد من حذف إيصال القبض هذا نهائياً من الخزنة؟")) {
+                    try { await deleteDoc(doc(db, "Payments", id)); alert("تم حذف الإيصال بنجاح"); } catch (error) { console.error(error); }
+                }
+            }
+
+
+            // ==========================================
+            // [ح] برمجيات شاشة التقارير والتقفيل الحر للسيارات والملاك
+            // ==========================================
+            if(reportTargetType) {
+                reportTargetType.addEventListener('change', () => {
+                    updateReportsDropdown();
+                    if(reportTargetType.value === 'customer') {
+                        document.getElementById('div-report-car-filter').classList.add('hidden');
+                    } else {
+                        document.getElementById('div-report-car-filter').classList.remove('hidden');
+                    }
+                });
+            }
+
+            if(reportEntitySelect) {
+                reportEntitySelect.addEventListener('change', updateReportCarsDropdown);
+            }
+
+            function updateReportsDropdown() {
+                if(!reportEntitySelect) return;
+                const type = reportTargetType.value;
+                reportEntitySelect.innerHTML = '';
+                
+                if(type === 'owner') {
+                    allOwners.forEach(o => {
+                        const opt = document.createElement('option'); opt.value = o.id; opt.textContent = o.name; reportEntitySelect.appendChild(opt);
+                    });
+                } else {
+                    allCustomers.forEach(c => {
+                        const opt = document.createElement('option'); opt.value = c.id; opt.textContent = c.name; reportEntitySelect.appendChild(opt);
+                    });
+                }
+                updateReportCarsDropdown();
+            }
+
+            function updateReportCarsDropdown() {
+                if(!reportCarSelect) return;
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                reportCarSelect.innerHTML = `<option value="">${translations[currentLang]['opt-report-all-cars']}</option>`;
+                const type = reportTargetType.value;
+                const entityId = reportEntitySelect.value;
+                
+                if(type === 'owner' && entityId) {
+                    const ownerCars = allCars.filter(car => car.ownerId === entityId);
+                    ownerCars.forEach(car => {
+                        const opt = document.createElement('option'); opt.value = car.id; opt.textContent = `${car.brand} ${car.model} (${car.plate})`; reportCarSelect.appendChild(opt);
+                    });
+                }
+            }
+
+            window.printReportInvoice = function() {
+                const invDate = document.getElementById('inv-report-now-date');
+                const currentLang = localStorage.getItem('lang') || 'ar';
+                if (!invDate || invDate.innerText === '-') {
+                    alert(currentLang === 'en' ? 'Please generate the statement first.' : 'يرجى توليد كشف الحساب أولاً.');
+                    return;
+                }
+                window.print();
+            };
+
+            if(btnGenerateReport) {
+                btnGenerateReport.addEventListener('click', () => {
+                    const currentLang = localStorage.getItem('lang') || 'ar';
+                    const t = (key) => translations[currentLang][key] || key;
+                    const dateLocale = currentLang === 'en' ? 'en-US' : 'ar-EG';
+                    const formatKm = (val) => `${val} ${t('rep-km-unit')}`;
+
+                    const type = reportTargetType.value;
+                    const entityId = reportEntitySelect.value;
+                    const selectedCarId = reportCarSelect.value;
+                    const startDateStr = reportStartDateInput.value;
+                    const endDateStr = reportEndDateInput.value;
+
+                    if(!entityId) return;
+
+                    // تعبئة البيانات الزمنية في منطقة الفاتورة
+                    document.getElementById('inv-report-now-date').innerText = new Date().toLocaleDateString(dateLocale);
+                    document.getElementById('inv-date-from').innerText = startDateStr || t('rep-date-start-default');
+                    document.getElementById('inv-date-to').innerText = endDateStr || t('rep-date-now');
+
+                    let totalGrossCost = 0;
+                    let totalOfficeCommission = 0;
+                    let totalDeductedExpenses = 0;
+                    let totalExtraKmRevenues = 0;
+
+                    let kmStartMin = Infinity;
+                    let kmEndMax = 0;
+                    let matchedCarObj = null;
+
+                    function isDateInPeriod(targetDateStr) {
+                        if (!targetDateStr) return true;
+                        const tDate = new Date(targetDateStr.substring(0, 10));
+                        if (startDateStr && tDate < new Date(startDateStr)) return false;
+                        if (endDateStr && tDate > new Date(endDateStr)) return false;
+                        return true;
+                    }
+
+                    if(type === 'owner') {
+                        const ownerObj = allOwners.find(o => o.id === entityId);
+                        document.getElementById('inv-owner-name').innerText = ownerObj ? ownerObj.name : '-';
+
+                        const targetCars = selectedCarId ? allCars.filter(c => c.id === selectedCarId) : allCars.filter(c => c.ownerId === entityId);
+                        const targetCarIds = targetCars.map(c => c.id);
+
+                        if(selectedCarId) {
+                            matchedCarObj = allCars.find(c => c.id === selectedCarId);
+                        }
+
+                        allContracts.forEach(cont => {
+                            if(!targetCarIds.includes(cont.carId)) return;
+                            const contractDate = cont.createdAt ? cont.createdAt.split('T')[0] : '';
+                            if(!isDateInPeriod(contractDate)) return;
+
+                            const gross = (cont.daysCount || 1) * cont.dayPrice;
+                            const commission = gross * ((cont.officeProfitRate || 10) / 100);
+
+                            totalGrossCost += gross;
+                            totalOfficeCommission += commission;
+
+                            if(cont.kmStart < kmStartMin) kmStartMin = cont.kmStart;
+                            if(cont.kmEnd && cont.kmEnd > kmEndMax) kmEndMax = cont.kmEnd;
+
+                            if(cont.status === 'Closed' && cont.counterType === 'locked' && cont.kmEnd) {
+                                const driven = cont.kmEnd - cont.kmStart;
+                                const allowed = cont.kmAllowed * (cont.daysCount || 1);
+                                if(driven > allowed) {
+                                    totalExtraKmRevenues += (driven - allowed) * cont.kmExtraPrice;
+                                }
+                            }
+                        });
+
+                        allExpenses.forEach(exp => {
+                            if(exp.payer !== 'owner' || exp.targetId !== entityId) return;
+                            if(!isDateInPeriod(exp.date)) return;
+                            totalDeductedExpenses += exp.amount;
+                        });
+
+                        document.getElementById('inv-car-info').innerText = matchedCarObj ? `${matchedCarObj.brand} ${matchedCarObj.model}` : t('rep-all-owner-cars');
+                        document.getElementById('inv-car-plate').innerText = matchedCarObj ? matchedCarObj.plate : t('rep-multi-plate');
+
+                    } else {
+                        const custObj = allCustomers.find(c => c.id === entityId);
+                        document.getElementById('inv-owner-name').innerText = custObj ? custObj.name : '-';
+                        document.getElementById('inv-car-info').innerText = t('rep-customer-statement');
+                        document.getElementById('inv-car-plate').innerText = '-';
+                    }
+
+                    const finalNetForOwner = (totalGrossCost - totalOfficeCommission - totalDeductedExpenses) + totalExtraKmRevenues;
+
+                    document.getElementById('rep-total-earned').innerText = totalGrossCost.toFixed(2) + " EGP";
+                    document.getElementById('rep-total-deducted').innerText = (totalOfficeCommission + totalDeductedExpenses).toFixed(2) + " EGP";
+                    document.getElementById('rep-net-result').innerText = finalNetForOwner.toFixed(2) + " EGP";
+
+                    document.getElementById('inv-km-start').innerText = kmStartMin === Infinity ? formatKm(0) : formatKm(kmStartMin);
+                    document.getElementById('inv-km-end').innerText = kmEndMax === 0 ? t('rep-pending') : formatKm(kmEndMax);
+                    document.getElementById('inv-km-total').innerText = (kmStartMin !== Infinity && kmEndMax !== 0) ? formatKm(kmEndMax - kmStartMin) : '-';
+
+                    document.getElementById('inv-calc-gross').innerText = totalGrossCost.toFixed(2) + " EGP";
+                    document.getElementById('inv-calc-office-profit').innerText = totalOfficeCommission.toFixed(2) + " EGP";
+                    document.getElementById('inv-calc-expenses').innerText = totalDeductedExpenses.toFixed(2) + " EGP";
+                    document.getElementById('inv-calc-extra-km').innerText = totalExtraKmRevenues.toFixed(2) + " EGP";
+                    document.getElementById('inv-calc-net').innerText = finalNetForOwner.toFixed(2) + " EGP";
+                });
+            }
+
+
+            // ==========================================
+            // [ط] تحديث الحسابات والماليات في لوحة التحكم (Dashboard)
+            // ==========================================
+            function updateFinanceDashboard() {
+                const netProfit = totalOfficeRevenues - totalCompanyExpenses;
+
+                document.getElementById('stat-total-revenues').innerText = totalOfficeRevenues.toFixed(2) + " EGP";
+                document.getElementById('stat-total-expenses').innerText = totalCompanyExpenses.toFixed(2) + " EGP";
+                
+                const netProfitEl = document.getElementById('stat-net-profit');
+                netProfitEl.innerText = netProfit.toFixed(2) + " EGP";
+                if(netProfit >= 0) {
+                    netProfitEl.className = "text-3xl font-bold text-blue-500 mt-2 tracking-tight";
+                } else {
+                    netProfitEl.className = "text-3xl font-bold text-rose-500 mt-2 tracking-tight";
+                }
+            }
+
+
+            // تهيئة أولية عند التشغيل
+            applyLanguage(localStorage.getItem('lang') || 'ar');
+            generateSerialAndSet();
+
+            // ربط المزامنة عند تبديل التابات لضمان تحميل القوائم التلقائي
+            tabButtons.forEach(b => {
+                b.addEventListener('click', () => {
+                    const tab = b.getAttribute('data-tab');
+                    if(tab === 'cars' && typeof allOwners !== 'undefined') {
+                        updateOwnersDropdown(allOwners);
+                    }
+                    if(tab === 'contracts') {
+                        updateContractsDropdowns();
+                        generateSerialAndSet();
+                    }
+                    if(tab === 'expenses') {
+                        updateExpensesDropdowns();
+                    }
+                    if(tab === 'payments') {
+                        updatePaymentsDropdowns();
+                    }
+                    if(tab === 'reports') {
+                        updateReportsDropdown();
+                    }
+                });
+            });
+
+        });
+    </script>
+</body>
+</html>
