@@ -99,7 +99,12 @@ function Get-VbsReasons {
     $reasons = @($dg.SecurityServicesRunning | Where-Object { $_ -gt 0 } | ForEach-Object {
         if ($names[[int]$_]) { $names[[int]$_] } else { "security service $_" } })
     if ($reasons.Count -eq 0) {
-        $reasons = @('the Windows hypervisor (Hyper-V / WSL2 / Android emulator / Virtual Machine Platform)')
+        $hello = Get-RegState 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\WindowsHello' 'Enabled'
+        if ($hello.Exists -and $hello.Value -eq 1) {
+            $reasons = @('Windows Hello protection (PIN / face / fingerprint keys)')
+        } else {
+            $reasons = @('the Windows hypervisor (Hyper-V / WSL2 / Android emulator / Virtual Machine Platform)')
+        }
     }
     return $reasons
 }
@@ -721,6 +726,12 @@ function Invoke-DisableVbs {
         $stacks = 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\KernelShadowStacks'
         if (Test-Path $stacks) { Set-Reg $stacks 'Enabled' 0 'DWord' }
         Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' 'LsaCfgFlags' 0 'DWord'   # Credential Guard
+        $hello = 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\WindowsHello'
+        if ((Get-RegState $hello 'Enabled').Value -eq 1) {
+            Write-Warn 'Windows Hello keys are VBS-protected here. Turning that off may ask you to set'
+            Write-Warn 'up your PIN again at the next sign-in - make sure you know your account password.'
+            if (Read-YesNo 'Turn off Windows Hello VBS protection too?') { Set-Reg $hello 'Enabled' 0 'DWord' }
+        }
         $policy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard'
         foreach ($name in 'EnableVirtualizationBasedSecurity', 'HypervisorEnforcedCodeIntegrity', 'LsaCfgFlags') {
             if ((Get-RegState $policy $name).Exists) { Set-Reg $policy $name 0 'DWord' }
