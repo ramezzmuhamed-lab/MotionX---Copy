@@ -880,30 +880,57 @@ function Get-MemoryLists {
     }
 }
 
+# Processes that must keep every core (system UI, audio, GPU driver, overlays)
+$KeepAllCores = '^(FiveM|dwm|csrss|winlogon|LogonUI|audiodg|fontdrvhost|ctfmon|sihost|' +
+                'TextInputHost|nvcontainer|NVDisplay\.Container|NVIDIA|RTSS|MSIAfterburner|' +
+                'powershell|conhost|WindowsTerminal|System|Idle|Registry|Memory Compression)'
+
+function Set-GamingClocks($ourPlan, [bool]$on) {
+    # Full clocks only while the game runs; idle clocks drop again afterwards
+    if (-not $ourPlan) { return }
+    $min = if ($on) { 100 } else { 5 }
+    Invoke-PowerCfg -setacvalueindex $ourPlan SUB_PROCESSOR PROCTHROTTLEMIN $min | Out-Null
+    Invoke-PowerCfg -setacvalueindex $ourPlan SUB_PROCESSOR PROCTHROTTLEMIN1 $min | Out-Null
+    Invoke-PowerCfg -setactive $ourPlan | Out-Null
+}
+
 function Invoke-Booster {
     Write-Title 'Game Booster (keep this window open while playing)'
 
-    $masks  = Get-CoreMasks
+    $masks   = Get-CoreMasks
     $pinGame = $false
     $pushBg  = $false
+    $ultra   = $false
     if ($masks.Hybrid -and [Environment]::ProcessorCount -le 64) {
         Write-Info ("Hybrid CPU: {0} P-core threads, {1} E-cores." -f $masks.PCount, $masks.ECount)
-        $pinGame = Read-YesNo 'Lock FiveM to the P-cores only?'
-        $pushBg  = Read-YesNo 'Move Discord / browsers / launchers to the E-cores?'
+        Write-Host '   1) Normal - FiveM on P-cores, Discord/browsers on E-cores'
+        Write-Host '   2) ULTRA  - FiveM gets the P-cores to itself: EVERY other app goes to'
+        Write-Host '               the E-cores (like disabling E-cores in BIOS, but reversed)'
+        Write-Host '   3) Off    - do not touch cores'
+        switch (Read-Host '  Choose [2]') {
+            '1'     { $pinGame = $true; $pushBg = $true }
+            '3'     { }
+            default { $pinGame = $true; $pushBg = $true; $ultra = $true }
+        }
     }
     $ramSaver = Read-YesNo 'RAM saver: trim background apps + auto-clean standby memory (like ISLC)?'
     # Clean when free RAM drops below ~6% of installed RAM (8 GB -> 512 MB, 16 GB -> 1 GB)
-    $totalRam = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory
+    $totalRam  = (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory
     $freeLimit = [Math]::Max([int64]512MB, [int64]($totalRam * 0.06))
+
+    # Max clocks while playing, only if our power plan is the active one
+    $ourPlan = $script:Backup.OurPlan
+    if ($ourPlan -and (Invoke-PowerCfg /getactivescheme) -notmatch $ourPlan) { $ourPlan = $null }
 
     $timer = [Native]::SetTimer($true)
     Write-Ok ("Timer resolution {0:N2} ms (smoother frame pacing)" -f ($timer / 10000))
     Write-Info 'Waiting for FiveM... press Q to stop.'
 
     $boosted   = @{}
-    $moved     = @{}
+    $moved     = @{}    # PID -> original priority / affinity, restored on exit
     $lastPurge = [datetime]::MinValue
     $tick      = 0
+    $clocksOn  = $false
     try {
         while ($true) {
             foreach ($proc in Get-Process | Where-Object { $_.ProcessName -match $GamePattern }) {
@@ -916,17 +943,32 @@ function Invoke-Booster {
                 } catch {
                     Write-Bad "Could not boost $($proc.ProcessName): $($_.Exception.Message)"
                 }
-                $boosted[$proc.Id] = $true
+                $boosted[$proc.Id] = $proc.SessionId
             }
 
             if ($boosted.Count -gt 0) {
-                foreach ($proc in Get-Process -Name $BackgroundApps -ErrorAction SilentlyContinue) {
+                if (-not $clocksOn -and $ourPlan) {
+                    Set-GamingClocks $ourPlan $true
+                    $clocksOn = $true
+                    Write-Ok 'CPU locked to full clocks while playing'
+                }
+
+                $session = @($boosted.Values)[0]
+                $targets = @(Get-Process -Name $BackgroundApps -ErrorAction SilentlyContinue)
+                if ($ultra) {
+                    $targets += Get-Process | Where-Object {
+                        $_.SessionId -eq $session -and $_.Id -ne $PID -and $_.ProcessName -notmatch $KeepAllCores }
+                }
+                foreach ($proc in $targets) {
                     if ($moved.ContainsKey($proc.Id)) { continue }
                     try {
-                        $proc.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal
+                        $orig = @{ Proc = $proc; Priority = $proc.PriorityClass; Affinity = $proc.ProcessorAffinity }
+                        if ($BackgroundApps -contains $proc.ProcessName) {
+                            $proc.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal
+                            if ($ramSaver) { [Native]::Trim($proc.Handle) | Out-Null }
+                        }
                         if ($pushBg) { $proc.ProcessorAffinity = [IntPtr]$masks.E }
-                        if ($ramSaver) { [Native]::Trim($proc.Handle) | Out-Null }
-                        $moved[$proc.Id] = $proc
+                        $moved[$proc.Id] = $orig
                     } catch {
                         $moved[$proc.Id] = $null
                     }
@@ -951,6 +993,10 @@ function Invoke-Booster {
                     Write-Info "Game process $id closed. Waiting for FiveM..."
                 }
             }
+            if ($boosted.Count -eq 0 -and $clocksOn) {
+                Set-GamingClocks $ourPlan $false
+                $clocksOn = $false
+            }
 
             $tick++
             for ($i = 0; $i -lt 30; $i++) {
@@ -960,14 +1006,15 @@ function Invoke-Booster {
         }
     } finally {
         [Native]::SetTimer($false) | Out-Null
-        foreach ($proc in $moved.Values) {
-            if (-not $proc -or $proc.HasExited) { continue }
+        if ($clocksOn) { Set-GamingClocks $ourPlan $false }
+        foreach ($orig in $moved.Values) {
+            if (-not $orig -or $orig.Proc.HasExited) { continue }
             try {
-                $proc.PriorityClass = [Diagnostics.ProcessPriorityClass]::Normal
-                $proc.ProcessorAffinity = [IntPtr]$masks.All
+                $orig.Proc.PriorityClass = $orig.Priority
+                $orig.Proc.ProcessorAffinity = $orig.Affinity
             } catch { }
         }
-        Write-Info 'Booster stopped, background apps back to normal.'
+        Write-Info 'Booster stopped, apps / cores / clocks back to normal.'
     }
 }
 
