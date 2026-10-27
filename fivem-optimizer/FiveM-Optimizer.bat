@@ -562,6 +562,7 @@ function Invoke-Optimize {
     # Registry --------------------------------------------------------------
     foreach ($t in $Tweaks) {
         try { Set-Reg $t[0] $t[1] $t[2] $t[3]; Write-Ok $t[4] }
+        catch [UnauthorizedAccessException] { Write-Info "$($t[4]): locked by Windows on this build - skipped" }
         catch { Write-Bad "$($t[4]): $($_.Exception.Message)" }
     }
 
