@@ -579,6 +579,8 @@ function Invoke-Optimize {
             Set-Reg $key 'Start' 4 'DWord'
             Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
             Write-Ok "Service off: $($list[$svc])"
+        } catch [Security.SecurityException], [UnauthorizedAccessException] {
+            Write-Info "Service $svc : locked by Windows on this build - skipped"
         } catch {
             Write-Bad "Service $svc : $($_.Exception.Message)"
         }
