@@ -1,2 +1,2 @@
-*.bat text eol=crlf
-*.ps1 text eol=crlf
+# Keep Windows line endings in the stored file so raw downloads run correctly
+*.bat -text
