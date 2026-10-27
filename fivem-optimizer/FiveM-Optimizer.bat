@@ -451,7 +451,12 @@ function Invoke-Diagnose {
     }
     $slowest = ($mods | Measure-Object ConfiguredClockSpeed -Minimum).Minimum
     $isDdr5 = @($mods | Where-Object { $_.SMBIOSMemoryType -eq 34 }).Count -gt 0
-    if (($isDdr5 -and $slowest -le 4800) -or (-not $isDdr5 -and $slowest -le 2666)) {
+    $kits = @($mods | ForEach-Object { '{0}|{1}|{2}' -f $_.Manufacturer, ([string]$_.PartNumber).Trim(), $_.Capacity } |
+              Select-Object -Unique)
+    if ($kits.Count -gt 1) {
+        Write-Warn 'Mixed RAM sticks (different brand/model): they run at the slower one''s speed and'
+        Write-Warn 'XMP may be unstable. Best upgrade: ONE matched kit (e.g. 2x16 GB DDR4-3200) + XMP.'
+    } elseif (($isDdr5 -and $slowest -le 4800) -or (-not $isDdr5 -and $slowest -le 2666)) {
         Write-Bad 'RAM runs at base speed. Enable XMP in BIOS - big win for CPU-bound FiveM.'
     }
     if ($totalGB -lt 12) {
