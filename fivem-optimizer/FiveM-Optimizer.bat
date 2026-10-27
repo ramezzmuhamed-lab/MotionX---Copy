@@ -93,6 +93,13 @@ function Get-FolderSize($path) {
     if ($sum) { return $sum } else { return 0 }
 }
 
+# Real GPUs only - skip Parsec / remote desktop / virtual display adapters
+function Get-PhysicalGpus {
+    @(Get-CimInstance Win32_VideoController | Where-Object {
+        $_.Name -match 'NVIDIA|Intel|AMD|Radeon' -and
+        $_.Name -notmatch 'Virtual|Parsec|Remote|Basic Display|Indirect|Spacedesk|Meta|Citrix' })
+}
+
 function Test-FiveMRunning {
     return [bool](Get-Process | Where-Object { $_.ProcessName -match '^FiveM' })
 }
@@ -459,7 +466,7 @@ function Invoke-Diagnose {
         Write-Bad 'No page file! FiveM stutters/crashes without one. Set it to "System managed".'
     }
 
-    $gpus = @(Get-CimInstance Win32_VideoController)
+    $gpus = Get-PhysicalGpus
     foreach ($g in $gpus) {
         Write-Info ("GPU     : {0}  driver {1} ({2:yyyy-MM-dd})" -f $g.Name, $g.DriverVersion, $g.DriverDate)
     }
@@ -655,7 +662,7 @@ function Get-FiveMExecutables {
 }
 
 function Set-FiveMHighPerformanceGpu {
-    if (@(Get-CimInstance Win32_VideoController).Count -lt 2) { return }
+    if ((Get-PhysicalGpus).Count -lt 2) { return }
     $exes = @(Get-FiveMExecutables)
     if ($exes.Count -eq 0) { Write-Info 'FiveM not found - start it once, then run option 2 again for the GPU fix.'; return }
     foreach ($exe in $exes) {
