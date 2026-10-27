@@ -198,12 +198,12 @@ function Get-Backup {
     if (-not $b) {
         $b = [pscustomobject]@{ Created = (Get-Date).ToString('s') }
     }
-    foreach ($prop in 'PowerPlan', 'OurPlan', 'Registry', 'Tasks', 'Files') {
+    foreach ($prop in 'PowerPlan', 'OurPlan', 'Registry', 'Tasks', 'Files', 'Exclusions') {
         if (-not ($b.PSObject.Properties.Name -contains $prop)) {
             $b | Add-Member -NotePropertyName $prop -NotePropertyValue $null
         }
     }
-    foreach ($prop in 'Registry', 'Tasks', 'Files') {
+    foreach ($prop in 'Registry', 'Tasks', 'Files', 'Exclusions') {
         $b.$prop = @($b.$prop | Where-Object { $_ })
     }
     return $b
@@ -334,8 +334,10 @@ $TelemetryTasks = @(
     @('\Microsoft\Windows\Windows Error Reporting\', 'QueueReporting')
 )
 
-# GTA V settings that cost CPU time, not GPU time (the GPU is idle anyway)
-$CpuPreset = [ordered]@{
+# GTA V settings that cost CPU time, not GPU time (the GPU is idle anyway).
+# Balanced keeps the game looking normal; MaxFps strips everything that adds
+# CPU draw calls / simulation (population, distance, shadows, reflections).
+$BalancedPreset = [ordered]@{
     'CityDensity'              = '0.400000'
     'PedVarietyMultiplier'     = '0.500000'
     'VehicleVarietyMultiplier' = '0.500000'
@@ -346,6 +348,30 @@ $CpuPreset = [ordered]@{
     'UltraShadows_Enabled'     = 'false'
     'HdStreamingInFlight'      = 'false'
     'GrassQuality'             = '0'
+}
+
+$MaxFpsPreset = [ordered]@{
+    'CityDensity'              = '0.000000'
+    'PedVarietyMultiplier'     = '0.000000'
+    'VehicleVarietyMultiplier' = '0.000000'
+    'LodScale'                 = '0.000000'
+    'MaxLodScale'              = '0.000000'
+    'PedLodBias'               = '0.000000'
+    'VehicleLodBias'           = '0.000000'
+    'Shadow_Distance'          = '1.000000'
+    'Shadow_LongShadows'       = 'false'
+    'UltraShadows_Enabled'     = 'false'
+    'Shadow_ParticleShadows'   = 'false'
+    'HdStreamingInFlight'      = 'false'
+    'GrassQuality'             = '0'
+    'ShadowQuality'            = '1'
+    'ReflectionQuality'        = '0'
+    'ReflectionMSAA'           = '0'
+    'ParticleQuality'          = '0'
+    'WaterQuality'             = '0'
+    'Tessellation'             = '0'
+    'Lighting_FogVolumes'      = 'false'
+    'MotionBlurStrength'       = '0.000000'
 }
 
 # ---------------------------------------------------------------- diagnose ---
@@ -537,9 +563,42 @@ function Invoke-Optimize {
     }
     Write-Ok 'Telemetry scheduled tasks off'
 
+    Add-DefenderExclusions
+
     Write-Host ''
     Write-Ok "Original settings saved in $BackupFile"
     Write-Warn 'Restart Windows once to apply everything.'
+}
+
+# ---------------------------------------------------- defender exclusions ---
+# Defender scanning FiveM's cache while assets stream in = CPU spikes / stutter.
+
+function Add-DefenderExclusions {
+    $pref = Get-MpPreference -ErrorAction SilentlyContinue
+    if (-not $pref) { Write-Info 'Microsoft Defender not active - skipping exclusions.'; return }
+
+    $paths = @("$env:LOCALAPPDATA\FiveM", "$env:APPDATA\CitizenFX")
+    $installKeys = @(
+        @('HKLM:\SOFTWARE\WOW6432Node\Rockstar Games\Grand Theft Auto V', 'InstallFolder'),
+        @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 271590', 'InstallLocation')
+    )
+    foreach ($k in $installKeys) {
+        $dir = (Get-RegState $k[0] $k[1]).Value
+        if ($dir) { $paths += ([string]$dir).TrimEnd('\') }
+    }
+
+    $existing = @($pref.ExclusionPath)
+    foreach ($path in ($paths | Where-Object { Test-Path $_ } | Select-Object -Unique)) {
+        if ($existing -contains $path) { continue }
+        try {
+            Add-MpPreference -ExclusionPath $path -ErrorAction Stop
+            $script:Backup.Exclusions = @($script:Backup.Exclusions) + $path
+            Save-Backup
+            Write-Ok "Defender stops scanning $path"
+        } catch {
+            Write-Warn "Could not add Defender exclusion for $path"
+        }
+    }
 }
 
 # -------------------------------------------------------- memory integrity ---
@@ -568,11 +627,17 @@ function Invoke-DisableVbs {
 
 # --------------------------------------------------------- FiveM settings ---
 
-function Invoke-GtaPreset {
-    Write-Title 'FiveM graphics: CPU-light preset'
-    Write-Info 'Lowers only the settings that load the CPU (population, distance, long shadows).'
-    Write-Info 'Your GPU is mostly idle, so textures / AA / resolution are left alone.'
+function Invoke-GtaPreset($mode) {
+    Write-Title 'FiveM graphics preset'
+    Write-Info 'Only CPU-heavy settings are changed. Textures / resolution / AA stay as they are,'
+    Write-Info 'so the game stays sharp - your GPU has plenty of headroom for those.'
     if (Test-FiveMRunning) { Write-Bad 'Close FiveM first.'; return }
+    if (-not $mode) {
+        Write-Host '   1) Balanced  - fewer cars/people, shorter draw distance, game looks normal'
+        Write-Host '   2) MAX FPS   - everything that costs CPU at minimum (biggest FPS gain)'
+        $mode = if ((Read-Host '  Choose') -eq '2') { 'max' } else { 'balanced' }
+    }
+    $preset = if ($mode -eq 'max') { $MaxFpsPreset } else { $BalancedPreset }
 
     $files = @($GtaSettingsFiles | Where-Object { Test-Path $_ })
     if ($files.Count -eq 0) {
@@ -584,12 +649,12 @@ function Invoke-GtaPreset {
             Backup-File $file
             [xml]$doc = Get-Content $file -Raw -ErrorAction Stop
             Write-Info $file
-            foreach ($key in $CpuPreset.Keys) {
+            foreach ($key in $preset.Keys) {
                 $node = $doc.SelectSingleNode("//$key")
                 if (-not $node -or -not $node.Attributes['value']) { continue }
                 $old = $node.value
-                $node.value = $CpuPreset[$key]
-                Write-Ok ("{0,-26} {1,-10} -> {2}" -f $key, $old, $CpuPreset[$key])
+                $node.value = $preset[$key]
+                Write-Ok ("{0,-26} {1,-10} -> {2}" -f $key, $old, $preset[$key])
             }
             $doc.Save($file)
         } catch {
@@ -838,6 +903,22 @@ function Invoke-Booster {
     }
 }
 
+# ------------------------------------------------------------- all-in-one ---
+
+function Invoke-AllInOne {
+    Write-Title 'ALL-IN-ONE: maximum FPS'
+    if (Test-FiveMRunning) { Write-Bad 'Close FiveM first.'; return }
+    Invoke-Optimize
+    Invoke-DisableVbs
+    Invoke-GtaPreset 'max'
+    Invoke-Clean
+    Invoke-Startup
+    Write-Title 'Done'
+    Write-Ok 'Everything applied. Option 9 undoes all of it.'
+    Write-Warn 'Restart, then start the GAME BOOSTER (B) before every session.'
+    if (Read-YesNo 'Restart now?') { Restart-Computer -Force }
+}
+
 # ---------------------------------------------------------------- restore ---
 
 function Invoke-Restore {
@@ -868,6 +949,11 @@ function Invoke-Restore {
         }
     }
     Write-Ok 'Scheduled tasks restored'
+
+    foreach ($path in $script:Backup.Exclusions) {
+        Remove-MpPreference -ExclusionPath $path -ErrorAction SilentlyContinue
+    }
+    if (@($script:Backup.Exclusions).Count) { Write-Ok 'Defender exclusions removed' }
 
     foreach ($f in $script:Backup.Files) {
         try {
@@ -909,20 +995,23 @@ $script:Backup = Get-Backup
 
 while ($true) {
     Write-Title 'FiveM Optimizer'
-    Write-Host '   1) Diagnose my PC                         (start here)'
+    Write-Host '   A) ALL-IN-ONE MAX FPS                     (does 2, 3, 4-max, 8, 6)' -ForegroundColor Green
+    Write-Host '   B) GAME BOOSTER - run while playing' -ForegroundColor Green
+    Write-Host ''
+    Write-Host '   1) Diagnose my PC'
     Write-Host '   2) Optimize Windows                       (power, services, telemetry, scheduler)'
     Write-Host '   3) Turn off Memory Integrity / VBS        (big FPS win on Windows 11)'
-    Write-Host '   4) FiveM graphics: CPU-light preset'
+    Write-Host '   4) FiveM graphics preset (Balanced / MAX FPS)'
     Write-Host "   5) Import a friend's FiveM settings file"
     Write-Host '   6) Startup apps'
     Write-Host '   7) Close heavy apps (free RAM now)'
     Write-Host '   8) Clean FiveM cache + temp + shader cache'
-    Write-Host '   B) GAME BOOSTER - run while playing'
     Write-Host '   9) Restore everything to original'
     Write-Host '   0) Exit'
     $choice = Read-Host "`n  Choose"
     try {
         switch ($choice) {
+            'a' { Invoke-AllInOne }
             '1' { Invoke-Diagnose }
             '2' { Invoke-Optimize }
             '3' { Invoke-DisableVbs }
