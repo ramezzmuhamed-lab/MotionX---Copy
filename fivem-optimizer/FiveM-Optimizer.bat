@@ -80,6 +80,30 @@ function Invoke-PowerCfg {
     return ((& powercfg.exe @args 2>&1 | ForEach-Object { "$_" }) -join ' ')
 }
 
+function Invoke-Bcd {
+    $ErrorActionPreference = 'Continue'
+    return ((& bcdedit.exe @args 2>&1 | ForEach-Object { "$_" }) -join "`n")
+}
+
+function Get-HypervisorLaunchType {
+    if ((Invoke-Bcd /enum '{current}') -match '(?m)^hypervisorlaunchtype\s+(\S+)') { return $Matches[1] }
+    return $null
+}
+
+# Why virtualization-based security is running (empty list = it is off)
+function Get-VbsReasons {
+    $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
+    if (-not $dg -or $dg.VirtualizationBasedSecurityStatus -ne 2) { return @() }
+    $names = @{ 1 = 'Credential Guard'; 2 = 'Memory Integrity (HVCI)'; 3 = 'System Guard Secure Launch'
+                4 = 'SMM firmware protection'; 5 = 'Kernel stack protection'; 6 = 'Hypervisor-enforced paging' }
+    $reasons = @($dg.SecurityServicesRunning | Where-Object { $_ -gt 0 } | ForEach-Object {
+        if ($names[[int]$_]) { $names[[int]$_] } else { "security service $_" } })
+    if ($reasons.Count -eq 0) {
+        $reasons = @('the Windows hypervisor (Hyper-V / WSL2 / Android emulator / Virtual Machine Platform)')
+    }
+    return $reasons
+}
+
 function Format-Size([double]$bytes) {
     if ($bytes -ge 1GB) { return '{0:N1} GB' -f ($bytes / 1GB) }
     if ($bytes -ge 1MB) { return '{0:N0} MB' -f ($bytes / 1MB) }
@@ -218,7 +242,7 @@ function Get-Backup {
     if (-not $b) {
         $b = [pscustomobject]@{ Created = (Get-Date).ToString('s') }
     }
-    foreach ($prop in 'PowerPlan', 'OurPlan', 'Registry', 'Tasks', 'Files', 'Exclusions') {
+    foreach ($prop in 'PowerPlan', 'OurPlan', 'Hypervisor', 'Registry', 'Tasks', 'Files', 'Exclusions') {
         if (-not ($b.PSObject.Properties.Name -contains $prop)) {
             $b | Add-Member -NotePropertyName $prop -NotePropertyValue $null
         }
@@ -424,15 +448,16 @@ function Invoke-Diagnose {
     }
 
     # Memory Integrity / VBS - the single biggest hidden FPS cost on Windows 11
-    $dg = Get-CimInstance -Namespace root\Microsoft\Windows\DeviceGuard -ClassName Win32_DeviceGuard -ErrorAction SilentlyContinue
-    if ($dg -and $dg.VirtualizationBasedSecurityStatus -eq 2) {
-        if (@($dg.SecurityServicesRunning) -contains 2) {
+    $vbs = @(Get-VbsReasons)
+    if ($vbs.Count) {
+        if ($vbs -contains 'Memory Integrity (HVCI)') {
             Write-Bad 'Memory Integrity (HVCI) is ON - typically costs 5-15% FPS in CPU-bound games.'
         } else {
             Write-Warn 'Virtualization-based security is running (some FPS cost).'
         }
+        Write-Warn ("          running because of: {0}" -f ($vbs -join ', '))
         Write-Warn 'Option 3 turns it off (fresh Windows 11 installs have it on by default).'
-    } elseif ($dg) {
+    } else {
         Write-Ok 'Memory Integrity / VBS is off.'
     }
 
@@ -693,15 +718,32 @@ function Invoke-DisableVbs {
     try {
         Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' 'Enabled' 0 'DWord'
         Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard' 'EnableVirtualizationBasedSecurity' 0 'DWord'
+        $stacks = 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\KernelShadowStacks'
+        if (Test-Path $stacks) { Set-Reg $stacks 'Enabled' 0 'DWord' }
+        Set-Reg 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' 'LsaCfgFlags' 0 'DWord'   # Credential Guard
         $policy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard'
-        if ((Get-RegState $policy 'EnableVirtualizationBasedSecurity').Exists) {
-            Set-Reg $policy 'EnableVirtualizationBasedSecurity' 0 'DWord'
+        foreach ($name in 'EnableVirtualizationBasedSecurity', 'HypervisorEnforcedCodeIntegrity', 'LsaCfgFlags') {
+            if ((Get-RegState $policy $name).Exists) { Set-Reg $policy $name 0 'DWord' }
         }
-        Write-Ok 'Memory Integrity / VBS off.'
-        Write-Warn 'Restart Windows. Then run option 1 to confirm it shows as off.'
+        Write-Ok 'Memory Integrity / Credential Guard / VBS off.'
     } catch {
         Write-Bad $_.Exception.Message
+        return
     }
+
+    # VBS also starts whenever the Windows hypervisor boots (Hyper-V, WSL2, emulators)
+    Write-Info 'VBS can still run if the Windows hypervisor starts at boot (Hyper-V, WSL2, Android'
+    Write-Info 'emulators, Windows Sandbox). Stopping it frees the CPU completely.'
+    if (Read-YesNo 'Also stop the hypervisor? (answer N if you use WSL2 / BlueStacks / Hyper-V)') {
+        if (-not $script:Backup.Hypervisor) {
+            $script:Backup.Hypervisor = [pscustomobject]@{ Value = (Get-HypervisorLaunchType) }
+            Save-Backup
+        }
+        $out = Invoke-Bcd /set '{current}' hypervisorlaunchtype off
+        if ($LASTEXITCODE -eq 0) { Write-Ok 'Hypervisor will not start at boot.' }
+        else { Write-Bad "bcdedit: $out" }
+    }
+    Write-Warn 'Restart Windows. Then run option 1 to confirm it shows as off.'
 }
 
 # --------------------------------------------------------- FiveM settings ---
@@ -1082,6 +1124,13 @@ function Invoke-Restore {
         }
     }
     Write-Ok 'Scheduled tasks restored'
+
+    if ($script:Backup.Hypervisor) {
+        $value = $script:Backup.Hypervisor.Value
+        if ($value) { Invoke-Bcd /set '{current}' hypervisorlaunchtype $value | Out-Null }
+        else        { Invoke-Bcd /deletevalue '{current}' hypervisorlaunchtype | Out-Null }
+        Write-Ok 'Hypervisor boot setting restored'
+    }
 
     foreach ($path in $script:Backup.Exclusions) {
         Remove-MpPreference -ExclusionPath $path -ErrorAction SilentlyContinue
