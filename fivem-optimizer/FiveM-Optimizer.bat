@@ -547,7 +547,7 @@ function Invoke-Optimize {
     if ($ourPlan) {
         $settings = @(
             'CPMINCORES 100', 'CPMINCORES1 100',      # no core parking (P and E)
-            'PROCTHROTTLEMIN 100', 'PROCTHROTTLEMIN1 100',
+            'PROCTHROTTLEMIN 5', 'PROCTHROTTLEMIN1 5',        # idle clocks down = cool when not gaming
             'PERFEPP 0', 'PERFEPP1 0',                # max performance preference
             'SCHEDPOLICY 2', 'SHORTSCHEDPOLICY 2'     # prefer P-cores for busy threads
         )
@@ -556,7 +556,7 @@ function Invoke-Optimize {
             Invoke-PowerCfg -setacvalueindex $ourPlan SUB_PROCESSOR $parts[0] $parts[1] | Out-Null
         }
         Invoke-PowerCfg -setactive $ourPlan | Out-Null
-        Write-Ok "Power plan '$PlanName' (no core parking, max clocks, prefer P-cores)"
+        Write-Ok "Power plan '$PlanName' (instant full boost, cool at idle, prefer P-cores)"
     }
 
     # Registry --------------------------------------------------------------
