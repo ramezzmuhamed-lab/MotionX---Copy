@@ -934,6 +934,7 @@ function Invoke-Booster {
     $lastPurge = [datetime]::MinValue
     $tick      = 0
     $clocksOn  = $false
+    $gameStart = Get-Date
     try {
         while ($true) {
             foreach ($proc in Get-Process | Where-Object { $_.ProcessName -match $GamePattern }) {
@@ -947,6 +948,7 @@ function Invoke-Booster {
                     Write-Bad "Could not boost $($proc.ProcessName): $($_.Exception.Message)"
                 }
                 $boosted[$proc.Id] = $proc.SessionId
+                $gameStart = Get-Date
             }
 
             if ($boosted.Count -gt 0) {
@@ -978,7 +980,8 @@ function Invoke-Booster {
                 }
 
                 # Every ~6 s: empty the standby list when free RAM runs low
-                if ($ramSaver -and ($tick % 2 -eq 0)) {
+                # (not during the first 2 minutes - the game is still loading assets)
+                if ($ramSaver -and ($tick % 2 -eq 0) -and ((Get-Date) - $gameStart).TotalSeconds -gt 120) {
                     $mem = Get-MemoryLists
                     if ($mem -and $mem.Free -lt $freeLimit -and $mem.Standby -gt 1GB -and
                         ((Get-Date) - $lastPurge).TotalSeconds -gt 30) {
